@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	rpc.Register(&shareReadWrite.Node{})
+	rpc.Register(shareReadWrite.NewNode("localhost:9876", "localhost:10030"))
 	l, err := net.Listen("tcp", ":9876")
 	if err != nil {
 		log.Fatal("listen error:", err)
