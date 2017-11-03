@@ -23,11 +23,17 @@ func main() {
 	fmt.Println("start go")
 	// go rpc.Accept(l)
 	go HandleStdIn()
+	go serveHttp(l)
+	for {
 
+	}
+
+}
+
+func serveHttp(l Listener) {
 	for {
 		http.Serve(l, nil)
 	}
-
 }
 
 // HandleStdIn ...
