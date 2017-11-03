@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/rpc"
 	"os"
 	"shareReadWrite/shareReadWrite"
@@ -20,8 +21,12 @@ func main() {
 
 	}
 	fmt.Println("start go")
-	go rpc.Accept(l)
-	HandleStdIn()
+	// go rpc.Accept(l)
+	go HandleStdIn()
+
+	for {
+		http.Serve(l, nil)
+	}
 
 }
 
