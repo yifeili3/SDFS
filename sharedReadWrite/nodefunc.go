@@ -37,6 +37,11 @@ func (n *Node) WriteLocalFIle(cmd WriteCmd, ret *string) error {
 	return err
 }
 
+func (n *Node) DeleteFile(file string, ret *string) error {
+	err := os.Remove(file)
+	checkError(err)
+}
+
 func checkError(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
