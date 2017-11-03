@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"shareReadWrite/shareReadWrite"
@@ -23,7 +22,6 @@ func main() {
 	}
 
 	go func() {
-	loop:
 		for {
 			conn, err := l.Accept()
 			if err == nil {
@@ -49,12 +47,6 @@ func main() {
 
 	}
 
-}
-
-func serveHttp(l Listener) {
-	for {
-		http.Serve(l, nil)
-	}
 }
 
 // HandleStdIn ...
