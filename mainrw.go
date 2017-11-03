@@ -13,17 +13,38 @@ import (
 
 func main() {
 	fmt.Println("start")
-	rpc.Register(shareReadWrite.NewNode("localhost:9876", "localhost:10030"))
+	rpcs := rpc.NewServer()
+	rpcs.Register(shareReadWrite.NewNode("localhost:9876", "localhost:10030"))
 	l, err := net.Listen("tcp", "127.0.0.1:9876")
 	fmt.Println("listen")
 	if err != nil {
 		log.Fatal("listen error:", err)
 
 	}
+
+	go func() {
+	loop:
+		for {
+			conn, err := l.Accept()
+			if err == nil {
+				fmt.Println("RPC server accept something")
+				go func() {
+					rpcs.ServeConn(conn)
+					conn.Close()
+				}()
+			} else {
+				fmt.Println("RPC server accept err")
+				break
+			}
+		}
+		fmt.Println("RPC server registeration end")
+	}()
+
 	fmt.Println("start go")
 	// go rpc.Accept(l)
 	go HandleStdIn()
-	go serveHttp(l)
+	// go serveHttp(l)
+
 	for {
 
 	}
@@ -63,9 +84,9 @@ func HandleStdIn() {
 
 func rpcGetFile(localFilename string, distFilename string) {
 	fmt.Println("rpcGetFile")
-	client, err := rpc.DialHTTP("tcp", "172.22.154.132:9876")
-	fmt.Println("rpcdialhttp")
-	fmt.Println(err)
+	client, err := rpc.Dial("tcp", "172.22.154.132:9876")
+	fmt.Println("rpcdial")
+	// fmt.Println(err)
 	if err != nil {
 		log.Printf(">Server dialing error")
 		return
