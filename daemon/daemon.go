@@ -328,7 +328,7 @@ func (d *Daemon) UpdateAndDisseminate() {
 	}
 
 	// 8,9,10 send membership to master
-	if d.ID == 8 || d.ID == 9 || d.ID == 10 {
+	if d.ID == 1 || d.ID == 2 || d.ID == 3 {
 		data := util.RPCMeta{Membership: d.MembershipList}
 		rpcMeta := util.RPCformat(data)
 		for i := range d.MasterList {
