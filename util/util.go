@@ -110,6 +110,11 @@ func MasterUDPSend(dstAddr *net.UDPAddr, info []byte) {
 	conn.Write(info)
 }
 
+func RPCformat(rpcmeta RPCMeta) []byte {
+	b, _ := json.Marshal(rpcmeta)
+	return b
+}
+
 // FormatString is a function that format the input string into []byte
 func FormatString(input Command) []byte {
 	sendMsg := IncomingMessage{Cmd: input}

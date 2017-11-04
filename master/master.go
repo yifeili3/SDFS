@@ -1,13 +1,12 @@
 package master
 
 import (
-	"hash/fnv"
-	"crypto/sha1"
-	"time"
 	"SDFS/util"
 	"encoding/json"
+	"hash/fnv"
 	"log"
 	"net"
+	"time"
 )
 
 const (
@@ -17,7 +16,6 @@ const (
 	putDone           = 2
 	deletePending     = 3
 )
-
 
 func (r *RPCMeta) getMessage(msg *Message, reply *MetaInfo) error {
 
@@ -137,7 +135,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
 			}
 			b, _ := json.Marshal(reply)
 			util.MasterUDPSend(remoteAddr, b)
-		} else{
+		} else {
 			// within 60s, sending back that need confirm
 			reply := &RPCMeta{
 				Command: Message{
@@ -149,33 +147,36 @@ func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
 			util.MasterUDPSend(remoteAddr, b)
 		}
 
-		
 	} else {
-		// calculate the file position for replica and new a new metadata pair, send the 
+		// calculate the file position for replica and new a new metadata pair
 		repList := m.FileChord(FileName)
 		m.MetaData[FileName] = &MetaInfo{
-			Filename    string
-			ReplicaList []int
-			Timestamp   int
-			State       int
+			Filename:    FileName,
+			ReplicaList: repList,
+			Timestamp:   time.Now().Unix(),
+			State:       putPending,
 		}
+		// return the replist
 	}
 }
-
 
 func (m *Master) FileChord(FileName string) []int {
 	h := fnv.New32a()
 	h.Write([]byte(FileName))
-	hashSum := h.Sum32()%10
+	hashSum := h.Sum32() % 10
 	count := 0
 	idx := hashSum
 	ret := make([]int, 3)
 	for count < 3 {
-		if (m.MemberAliveList[idx] == true){
+		if m.MemberAliveList[idx] == true {
 			ret[count] = idx
 			idx += 1
-
+			count += 1
+			if idx == 10 {
+				idx = 0
+			}
 		}
 	}
+	return ret
 
 }
