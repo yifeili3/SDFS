@@ -136,6 +136,7 @@ func (d *Daemon) HandleStdIn() {
 	// JOIN LEAVE LIST LISTID
 	for {
 		input, _ = inputReader.ReadString('\n')
+		log.Println("Get the input:" + input)
 		command := strings.Split(input, " ")
 		if len(command) == 1 {
 			if command[0] == "JOIN" {
