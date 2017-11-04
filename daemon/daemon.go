@@ -5,8 +5,10 @@ import (
 	"Membership/util"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -20,6 +22,7 @@ const (
 	contactListener = 4096
 	contactSender   = 4002
 	udpport         = 4000
+	sdfsport        = 4004
 	sdfsDir         = "/home/yifeili3/sdfs/"
 	localDir        = "/home/yifeili3/local/"
 )
@@ -35,6 +38,9 @@ type Daemon struct {
 	MonitorList    []int
 	Alive          bool
 	Active         bool
+	SDFSConnection *net.UDPConn
+	SDFSUDPAddr    net.UDPAddr
+	Replica        chan []int
 }
 
 // Introducer process
@@ -44,13 +50,13 @@ type Introducer struct {
 }
 
 type Message struct {
-	cmd          string
-	sdfsFileName string
+	Cmd          string
+	SdfsFileName string
 }
 
 type RPCMeta struct {
-	MetaData map[string]MetaInfo
-	Command  Message
+	ReplicaList []int
+	Command     Message
 }
 
 type MetaInfo struct {
@@ -78,12 +84,12 @@ func NewIntroducer() (in *Introducer) {
 
 // Construct newDaemon ...
 func NewDaemon() (daemon *Daemon, err error) {
-	/*   Initialize membership     */
 	serverID := whoAmI()
 	ipAddr := whereAmI()
 	log.Println("Create daemon process on node ", serverID)
 	util.WriteLog(serverID, "Create daemon process on node "+strconv.Itoa(serverID))
 
+	/*   Initialize membership     */
 	addr := net.UDPAddr{
 		Port: udpport,
 		IP:   net.ParseIP(ipAddr),
@@ -94,25 +100,25 @@ func NewDaemon() (daemon *Daemon, err error) {
 		util.WriteLog(serverID, "Can not create UDP listener.")
 	}
 
-	if serverID == 1 || serverID == 2 || serverID == 3 {
-		daemon = &Daemon{
-			Connection:     conn,
-			Addr:           addr,
-			ID:             serverID,
-			MembershipList: make([]member.Node, 10),
-			Alive:          true,
-			Active:         false,
-			MetaData:       make(map[string]MetaInfo),
-		}
-	} else {
-		daemon = &Daemon{
-			Connection:     conn,
-			Addr:           addr,
-			ID:             serverID,
-			MembershipList: make([]member.Node, 10),
-			Alive:          true,
-			Active:         false,
-		}
+	sdfsaddr := net.UDPAddr{
+		Port: sdfsport,
+		IP:   net.ParseIP(ipAddr),
+	}
+	sdfsconn, err := net.ListenUDP("udp", &sdfsaddr)
+	if err != nil {
+		log.Println("Can not create SDFSUDP listener: ", err)
+		util.WriteLog(serverID, "Can not create UDP listener.")
+	}
+
+	daemon = &Daemon{
+		Connection:     conn,
+		Addr:           addr,
+		ID:             serverID,
+		MembershipList: make([]member.Node, 10),
+		Alive:          true,
+		Active:         false,
+		SDFSConnection: sdfsconn,
+		SDFSUDPAddr:    sdfsaddr,
 	}
 	//fill member in memberlist
 	for i := 0; i < 10; i++ {
@@ -125,18 +131,13 @@ func NewDaemon() (daemon *Daemon, err error) {
 	return daemon, err
 }
 
-func (d *Daemon) RunMaster() {
-
-}
-
 // HandleStdIn ...
 // Thread to wait for standard input
 func (d *Daemon) HandleStdIn() {
 	var input string
 	// JOIN LEAVE LIST LISTID
 	for {
-		fmt.Scanln(&input)
-
+		fmt.Scanf("%q", &input)
 		command := strings.Split(input, " ")
 		if len(command) == 1 {
 			if command[0] == "JOIN" {
@@ -153,17 +154,26 @@ func (d *Daemon) HandleStdIn() {
 				// handle second write
 			} else if command[0] == "NO" {
 				// reject second write
+			} else if command[0] == "STORE" {
+				d.store()
 			} else {
 				log.Println("Please enter valid command!")
 				continue
 			}
 		} else {
 			if len(command) == 3 && command[0] == "PUT" {
-				put(command[1], command[2])
+				d.put(command[1], command[2])
+			} else if len(command) == 3 && command[0] == "GET" {
+				d.get(command[1], command[2])
+			} else if len(command) == 2 && command[0] == "DELETE" {
+				d.delete(command[1])
+			} else if len(command) == 2 && command[0] == "LS" {
+				d.list(command[1])
+			} else {
+				log.Println("Please enter valid command!")
+				continue
 			}
-
 		}
-
 	}
 }
 
@@ -557,52 +567,108 @@ func calculateIP(id int) string {
 
 /****************Start of SDFS function****************/
 
-func put(localFile string, sdfsFile string) {
-	var replicaList []int
-	// rpc to get replica list
-	for i := range replicaList {
-		// rpc send
+//SDFSListener listens message from master
+func (d *Daemon) SDFSListener() {
+	p := make([]byte, 8192)
+
+	for {
+		n, remoteAddr, _ := d.SDFSConnection.ReadFromUDP(p)
+
+		if n == 0 {
+			continue
+		} else {
+			var ret util.IncomingMessage
+			err := json.Unmarshal(p[0:n], &ret)
+			if err != nil {
+				log.Println(err)
+			}
+			if ret.Command.Cmd == "PUT" {
+				d.Replica := make(chan []int)
+				d.Replica <- ret.ReplicaList
+			} else if ret.Command.Cmd == "GET" {
+				d.Replica := make(chan []int)
+				d.Replica <- ret.ReplicaList
+			} else if ret.Command.Cmd == "DELETE" {
+				deleteFile(ret.Command.SdfeFileName)
+			} else if re.Command.Cmd == "LS"{
+				d.Replica :=make(chan []int)
+			}
+		}
 	}
+
+
 }
 
-func get(sdfsFile string, localFile string) {
+
+
+func (d *Daemon) put(localFile string, sdfsFile string) {
+	// rpc to get replica list
+	/*
+		b := util.FormatMemberlist(d.MembershipList)
+		for i := range d.SendList {
+			index := d.SendList[i]
+			targetAddr := d.MembershipList[index].UDP
+			util.UDPSend(&targetAddr, b)
+		}*/
+
+	replicaList := <-d.Replica
+	for i := range replicaList {
+
+	}
+
+}
+
+func (d *Daemon) get(sdfsFile string, localFile string) {
 	//rpc
-
+	replicaList := <-d.Replica
+	if len(replicaList) == 0 {
+		log.Println("File Not available")
+		return
+	}
+	// rpc.getfile()
 }
 
-func delete(sdfsFile string) {
-	// rpc to delete
+func (d *Daemon) delete(sdfsFile string) {
+	// to delete
 
 	//invoke rpc here
 }
 
 func (d *Daemon) store() {
 	//read from daemon.File
-	// os.execute(ls)
+	cmd := "ls " + sdfsDir
+	lsCmd := exec.Command("bash", "-c", cmd)
+	cmdOut, _ := lsCmd.StdoutPipe()
+	lsCmd.Start()
+	outputBytes, _ := ioutil.ReadAll(cmdOut)
+	lsCmd.Wait()
+
+	fmt.Print(string(outputBytes))
+	return
 }
 
-func list(sdfsFile string) {
-	// rpc to master and get metadata
+func (d *Daemon) list(sdfsFile string) {
+	// send packet to master and get metadata
 
+
+	//
+	replicaList:=<-d.Replica
+	for i:= range replicaList{
+		log.Println(replicaList[i])
+	}
 }
 
 func (d *Daemon) clearSDFS() {
-	// os.execute(rm *)
+	cmd := "rm " + sdfsDir + "*"
+	clearDir := exec.Command("bash", "-c", cmd)
+	clearDir.Start()
+	return
 }
 
-func (r *RPCMeta) getMessage(msg *Message, reply *MetaInfo) error {
-	if msg.cmd == "PUT" {
-		// check timeout, if timeout Return empty MetaInfo, else return
-		*reply = r.MetaData[msg.sdfsFileName]
-	} else if msg.cmd == "GET" {
-
-	} else if msg.cmd == "DELETE" {
-
-	} else if msg.cmd == "LIST" {
-
-	} else {
-
-	}
-
-	return nil
+// Receive delete command from master
+func (d *Daemon) deleteFile(sdfsFile string) {
+	cmd := "rm " + sdfsFile
+	delFile := exec.Command("bash", "-c", cmd)
+	delFile.Start()
+	return
 }
