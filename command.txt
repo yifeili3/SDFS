@@ -12,6 +12,7 @@ go build -o ../../pkg/member.a member/member.go
 go build -o ../../pkg/util.a util/util.go
 go build -o ../../pkg/daemon.a daemon/daemon.go
 go build -o ../../pkg/shareReadWrite.a shareReadWrite/nodefunc.go
+go build -o ../../pkg/master.a master/master.go
 
 
 

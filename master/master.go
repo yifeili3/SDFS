@@ -28,7 +28,7 @@ type Master struct {
 	IsMaster        bool
 }
 
-type MetaMap map[string]*MetaInfo
+type MetaMap map[string]*util.MetaInfo
 
 func getAvailableNode() {
 
@@ -94,7 +94,7 @@ func (m *Master) UDPListener() {
 					m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
 				}
 			} else if len(ret.Membership) != 0 {
-
+				m.UpdateAlivelist(ret.Membership)
 			}
 		}
 
@@ -193,7 +193,6 @@ func (m *Master) ProcessDeleteReq(remoteAddr *net.UDPAddr, FileName string) {
 	}
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		repList := metaInfo.ReplicaList
-		count := 0
 		for count := 0; count < 3; count++ {
 			tcpAddr := calTCP(repList[count])
 			client, err := rpc.DialHTTP("tcp", tcpAddr)
