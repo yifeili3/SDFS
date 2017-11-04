@@ -1,14 +1,17 @@
 package daemon
 
 import (
-	"Membership/member"
-	"Membership/util"
+	"SDFS/member"
+	"SDFS/shareReadWrite"
+	"SDFS/util"
 	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"net/rpc"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -30,43 +33,26 @@ const (
 
 // Daemon process
 type Daemon struct {
-	Connection     *net.UDPConn
-	Addr           net.UDPAddr
-	ID             int
-	MembershipList []member.Node
-	MetaData       map[string]MetaInfo
-	SendList       []int
-	MonitorList    []int
-	Alive          bool
-	Active         bool
-	SDFSConnection *net.UDPConn
-	SDFSUDPAddr    net.UDPAddr
-	Replica        chan []int
-	CurrentMasterID  int
-	MasterList     []int
+	Connection      *net.UDPConn
+	Addr            net.UDPAddr
+	ID              int
+	MembershipList  []member.Node
+	SendList        []int
+	MonitorList     []int
+	Alive           bool
+	Active          bool
+	SDFSConnection  *net.UDPConn
+	SDFSUDPAddr     net.UDPAddr
+	Replica         chan []int
+	CurrentMasterID int
+	MasterList      []member.Node
+	Msg             chan util.RPCMeta
 }
 
 // Introducer process
 type Introducer struct {
 	MembershipList []member.Node
 	Addr           net.UDPAddr
-}
-
-type Message struct {
-	Cmd          string
-	SdfsFileName string
-}
-
-type RPCMeta struct {
-	ReplicaList []int
-	Command     Message
-}
-
-type MetaInfo struct {
-	Filename    string
-	ReplicaList []int
-	Timestamp   int
-	FileSize    int
 }
 
 // Construct newIntroducer
@@ -114,17 +100,17 @@ func NewDaemon() (daemon *Daemon, err error) {
 	}
 
 	daemon = &Daemon{
-		Connection:     conn,
-		Addr:           addr,
-		ID:             serverID,
-		MembershipList: make([]member.Node, 10),
-		Alive:          true,
-		Active:         false,
-		SDFSConnection: sdfsconn,
-		SDFSUDPAddr:    sdfsaddr,
-		CurrentMaster:  1,
-		MasterList:     make([]member.Node, 3),
-		Msg:			make(chan util.RPCMeta)
+		Connection:      conn,
+		Addr:            addr,
+		ID:              serverID,
+		MembershipList:  make([]member.Node, 10),
+		Alive:           true,
+		Active:          false,
+		SDFSConnection:  sdfsconn,
+		SDFSUDPAddr:     sdfsaddr,
+		CurrentMasterID: 1,
+		MasterList:      make([]member.Node, 3),
+		Msg:             make(chan util.RPCMeta),
 	}
 	//fill member in memberlist
 	for i := 0; i < 10; i++ {
@@ -341,9 +327,15 @@ func (d *Daemon) UpdateAndDisseminate() {
 		util.UDPSend(&targetAddr, b)
 	}
 
-	/*++++++++++++TODO++++++++++++*/
 	// 8,9,10 send membership to master
-
+	if d.ID == 8 || d.ID == 9 || d.ID == 10 {
+		data := util.RPCMeta{Membership: d.MembershipList}
+		rpcMeta := util.RPCformat(data)
+		for i := range d.MasterList {
+			targetAddr := d.MasterList[i].UDP
+			util.UDPSend(&targetAddr, rpcMeta)
+		}
+	}
 }
 
 func (d *Daemon) joinGroup() {
@@ -592,7 +584,7 @@ func calculateIP(id int) string {
 func (d *Daemon) SDFSListener() {
 	p := make([]byte, 8192)
 	for {
-		n, remoteAddr, _ := d.SDFSConnection.ReadFromUDP(p)
+		n, _, _ := d.SDFSConnection.ReadFromUDP(p)
 		if n == 0 {
 			continue
 		} else {
@@ -606,9 +598,7 @@ func (d *Daemon) SDFSListener() {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
-			} else if ret.Command.Cmd == "DELETE" {
-				deleteFile(ret.Command.SdfeFileName)
-			} else if re.Command.Cmd == "LS"{
+			} else if ret.Command.Cmd == "LS" {
 				d.Msg <- ret
 			}
 		}
@@ -617,26 +607,26 @@ func (d *Daemon) SDFSListener() {
 
 func (d *Daemon) put(localFile string, sdfsFile string) {
 	// rpc to get replica list
-	metadata:= RPCMeta{Command:Message{Cmd:"PUT",SdfsFileName:sdfsFile}}
-	b := util.RPCformat(metadata)
+	data := util.RPCMeta{Command: util.Message{Cmd: "PUT", SdfsFileName: sdfsFile}}
+	b := util.RPCformat(data)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 	util.UDPSend(&targetAddr, b)
 
 	msg := <-d.Msg
 	for i := range msg.ReplicaList {
-		rpcTransferFile(msg.ReplicaList[i],localFile,sdfsFile)
+		rpcTransferFile(msg.ReplicaList[i], localFile, sdfsFile)
 	}
 
-	metadata:= RPCMeta{Command:Message{Cmd:"PUTACK",SdfsFileName:sdfsFile}}
-	b := util.RPCformat(metadata)
-	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+	data = util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
+	b = util.RPCformat(data)
+	targetAddr = d.MasterList[d.CurrentMasterID-1].UDP
 	util.UDPSend(&targetAddr, b)
-	log.Println("PUT "+ sdfsFile +" success")
+	log.Println("PUT " + sdfsFile + " success")
 }
 
 func (d *Daemon) get(sdfsFile string, localFile string) {
-	metadata:= RPCMeta{Command:Message{Cmd:"GET", SdfsFileName:sdfsFile}}
-	b := util.RPCformat(metadata)
+	data := util.RPCMeta{Command: util.Message{Cmd: "GET", SdfsFileName: sdfsFile}}
+	b := util.RPCformat(data)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 	util.UDPSend(&targetAddr, b)
 
@@ -646,32 +636,13 @@ func (d *Daemon) get(sdfsFile string, localFile string) {
 		return
 	}
 	// get file from sdfs
-	rpcTransferFile(msg.ReplicaList[0],sdfsFile,localFile)
-	log.Println("GET "+sdfsFile+" success")
+	rpcTransferFile(msg.ReplicaList[0], sdfsFile, localFile)
+	log.Println("GET " + sdfsFile + " success")
 }
-
-func rpcTransferFile(serverID int, srcFile string, destFile string) {
-	log.Println("Start Getting File")
-	client, err := rpc.DialHTTP("tcp", whereAmI(serverID)+":9876")
-	if err != nil {
-		log.Printf(">Server dialing error")
-		return
-	}
-	
-	var reply string
-	err = client.Call("Node.ReadLocalFile", destFile, &reply)
-	checkError(err)
-	// fmt.Println("The reply is:" + reply)
-
-	n := &shareReadWrite.Node{}
-	cmd := &shareReadWrite.WriteCmd{File: srcFile, Input: reply}
-	n.WriteLocalFile(*cmd, &reply)
-}
-
 
 func (d *Daemon) delete(sdfsFile string) {
 	// to delete
-	metadata:= RPCMeta{Command:Message{Cmd:"DELETE", SdfsFileName:sdfsFile}}
+	metadata := util.RPCMeta{Command: util.Message{Cmd: "DELETE", SdfsFileName: sdfsFile}}
 	b := util.RPCformat(metadata)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 	util.UDPSend(&targetAddr, b)
@@ -692,14 +663,14 @@ func (d *Daemon) store() {
 
 func (d *Daemon) list(sdfsFile string) {
 	// send packet to master and get metadata
-	metadata:= RPCMeta{Command:Message{Cmd:"LS", SdfsFileName:sdfsFile}}
+	metadata := util.RPCMeta{Command: util.Message{Cmd: "LS", SdfsFileName: sdfsFile}}
 	b := util.RPCformat(metadata)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 	util.UDPSend(&targetAddr, b)
 
-	replicaList:=<-d.Msg
-	for i:= range replicaList{
-		log.Println(replicaList[i])
+	msg := <-d.Msg
+	for i := range msg.ReplicaList {
+		log.Println(msg.ReplicaList[i])
 	}
 }
 
@@ -718,35 +689,33 @@ func (d *Daemon) deleteFile(sdfsFile string) {
 	return
 }
 
-func (d *Daemon) updateCurrentMaster(){
-	 m:=make(map[int]int)
-	 for i:=range d.MembershipList{
-		 if d.MembershipList[i].Active && !d.MembershipList.Fail{
-			 m[i+1]+=1
-		 }
-	 }
-	 var mastercount int
-	 var master int
-	 for k,v:=range m{
-		 if v>= mastercount {
-			master=k
-		 } 
-	 }
-	 d.CurrentMasterID = master
+func (d *Daemon) updateCurrentMaster() {
+	m := make(map[int]int)
+	for i := range d.MembershipList {
+		if d.MembershipList[i].Active && !d.MembershipList[i].Fail {
+			m[i+1]++
+		}
+	}
+	var mastercount int
+	var master int
+	for k, v := range m {
+		if v >= mastercount {
+			master = k
+		}
+	}
+	d.CurrentMasterID = master
 }
-
 
 func rpcTransferFile(serverID int, srcFile string, destFile string) {
 	log.Println("Start Getting File")
-	client, err := rpc.DialHTTP("tcp", whereAmI(serverID)+":9876")
+	client, err := rpc.DialHTTP("tcp", calculateIP(serverID)+":9876")
 	if err != nil {
 		log.Printf(">Server dialing error")
 		return
 	}
-	
+
 	var reply string
 	err = client.Call("Node.ReadLocalFile", destFile, &reply)
-	checkError(err)
 	// fmt.Println("The reply is:" + reply)
 
 	n := &shareReadWrite.Node{}
