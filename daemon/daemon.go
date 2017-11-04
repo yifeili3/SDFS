@@ -9,11 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-<<<<<<< HEAD
 	"os/exec"
-=======
-	"os"
->>>>>>> 3780bff5f8eef76fbd61f74b488e88263dc68c80
 	"strconv"
 	"strings"
 )
