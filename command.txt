@@ -8,11 +8,11 @@ scp /mnt/ssh/go/src/Membership/daemon/daemon.go yifeili3@fa17-cs425-g54-05.cs.il
 scp /mnt/ssh/go/src/Membership/daemon/daemon.go yifeili3@fa17-cs425-g54-06.cs.illinois.edu:/home/yifeili3/go/src/Membership/daemon/
 
 
-go build -o ../../pkg/member.a member/member.go
-go build -o ../../pkg/util.a util/util.go
-go build -o ../../pkg/daemon.a daemon/daemon.go
-go build -o ../../pkg/shareReadWrite.a shareReadWrite/nodefunc.go
-go build -o ../../pkg/master.a master/master.go
+go build -o ../../pkg/SDFS/member.a member/member.go
+go build -o ../../pkg/SDFS/util.a util/util.go
+go build -o ../../pkg/SDFS/daemon.a daemon/daemon.go
+go build -o ../../pkg/SDFS/shareReadWrite.a shareReadWrite/nodefunc.go
+go build -o ../../pkg/SDFS/master.a master/master.go
 
 
 

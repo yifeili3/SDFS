@@ -135,8 +135,6 @@ func (d *Daemon) HandleStdIn() {
 	inputReader := bufio.NewReader(os.Stdin)
 	// JOIN LEAVE LIST LISTID
 	for {
-		fmt.Scanf("%q", &input)
-		fmt.Println("Enter the operation:")
 		input, _ = inputReader.ReadString('\n')
 		command := strings.Split(input, " ")
 		if len(command) == 1 {
