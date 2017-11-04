@@ -72,7 +72,7 @@ func rpcGetFile(localFilename string, distFilename string) {
 
 	n := &shareReadWrite.Node{}
 	cmd := &shareReadWrite.WriteCmd{File: localFilename, Input: reply}
-	n.WriteLocalFIle(*cmd, &reply)
+	n.WriteLocalFile(*cmd, &reply)
 	fmt.Println("write file success")
 
 }

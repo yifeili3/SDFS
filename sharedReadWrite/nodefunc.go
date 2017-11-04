@@ -37,7 +37,7 @@ func (n *Node) ReadLocalFile(file string, ret *string) error {
 	return err
 }
 
-func (n *Node) WriteLocalFIle(cmd WriteCmd, ret *string) error {
+func (n *Node) WriteLocalFile(cmd WriteCmd, ret *string) error {
 	err := ioutil.WriteFile(cmd.File, []byte(cmd.Input), 0666)
 	fmt.Printf("Wirte file %s success\n", cmd.File)
 	*ret = "WRITE"
