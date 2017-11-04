@@ -1,7 +1,7 @@
 package main
 
 import (
-	"Membership/daemon"
+	"SDFS/daemon"
 	"log"
 	"time"
 )
