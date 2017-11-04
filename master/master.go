@@ -4,6 +4,7 @@ import (
 	"SDFS/member"
 	"SDFS/util"
 	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"log"
 	"net"
@@ -13,12 +14,13 @@ import (
 )
 
 const (
-	contactListenport = 10030
-	serverBase        = "172.22.154.132"
-	putPending        = 1
-	putDone           = 2
-	deletePending     = 3
-	rpcServerport     = 4004
+	masterListener = 4010
+	serverBase     = "172.22.154.132"
+	putPending     = 1
+	putDone        = 2
+	deletePending  = 3
+	rpcServerport  = 4004
+	sdfsListener   = 4008
 )
 
 type Master struct {
@@ -30,32 +32,29 @@ type Master struct {
 
 type MetaMap map[string]*util.MetaInfo
 
-func getAvailableNode() {
-
-}
-
-func newMaster() (m *Master) {
+func NewMaster() (m *Master) {
 	ID := util.WhoAmI()
 	ipAddr := util.WhereAmI()
 
 	addr := net.UDPAddr{
-		Port: contactListenport,
+		Port: masterListener,
 		IP:   net.ParseIP(ipAddr),
 	}
 	m = &Master{
 		Addr:            addr,
 		MemberAliveList: make([]bool, 10),
 		MetaData:        make(MetaMap),
+		IsMaster:        true,
 	}
 	for i := 0; i < 10; i++ {
 		m.MemberAliveList[i] = false
 	}
 	m.MemberAliveList[ID-1] = true
-
 	return m
 }
 
 func (m *Master) UDPListener() {
+	fmt.Println("Start Master UDP Listener")
 	// firstly, build up the UDP listen port to listen to message
 	udpAddr := m.Addr
 	conn, err := net.ListenUDP("udp", &udpAddr)
@@ -69,32 +68,40 @@ func (m *Master) UDPListener() {
 	// a for loop to cope with all situation:
 	p := make([]byte, 4096)
 	for {
+		// *************************bug here, remote addr  wrong port
 		n, remoteAddr, err := conn.ReadFromUDP(p)
+		remoteAddr.Port = sdfsListener
+		// fmt.Println("Master: " + remoteAddr.String())
 		if err != nil {
 			log.Println("Contact get UDP message err!", err)
 		}
-		var ret util.RPCMeta
-		err = json.Unmarshal(p[0:n], &ret)
-
-		if err != nil {
-			log.Println("Get some unknow UDP message")
+		if n == 0 {
+			continue
 		} else {
-			if len(ret.Command.Cmd) != 0 {
-				if ret.Command.Cmd == "PUT" {
-					m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.Cmd == "GET" {
-					m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.Cmd == "LS" {
-					m.ProcessLSReq(remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.Cmd == "DELETE" {
-					m.ProcessDeleteReq(remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.Cmd == "PUTCOMFIRM" {
-					m.ProcessPUTComfirm(remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.Cmd == "PUTACK" {
-					m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
+			var ret util.RPCMeta
+			err = json.Unmarshal(p[0:n], &ret)
+
+			if err != nil {
+				log.Println("Get some unknow UDP message")
+			} else {
+				if len(ret.Command.Cmd) != 0 {
+					if ret.Command.Cmd == "PUT" {
+						fmt.Println("Enter Master PUT")
+						m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "GET" {
+						m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "LS" {
+						m.ProcessLSReq(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "DELETE" {
+						m.ProcessDeleteReq(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "PUTCOMFIRM" {
+						m.ProcessPUTComfirm(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "PUTACK" {
+						m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
+					}
+				} else if len(ret.Membership) != 0 {
+					m.UpdateAlivelist(ret.Membership)
 				}
-			} else if len(ret.Membership) != 0 {
-				m.UpdateAlivelist(ret.Membership)
 			}
 		}
 
@@ -106,6 +113,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 	if m.IsMaster == false {
 		return
 	}
+	fmt.Println("In master put")
 	// check if this file already in the metadata
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		// it's a update operation
@@ -123,9 +131,11 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 			// within 60s, sending back that need confirm
 			genReplyandSend(make([]int, 0), "PUTCONFIRM", FileName, remoteAddr)
 		}
+		fmt.Println("In master put 1")
 
 	} else {
 		// calculate the file position for replica and new a new metadata pair
+		fmt.Println("In master put 2")
 		repList := m.FileChord(FileName)
 		m.MetaData[FileName] = &util.MetaInfo{
 			Filename:    FileName,
@@ -135,8 +145,8 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 		}
 		// return the replist
 		genReplyandSend(repList, "PUT", FileName, remoteAddr)
-
 	}
+	fmt.Println("Leave master put")
 }
 
 func (m *Master) FileChord(FileName string) []int {
@@ -146,14 +156,17 @@ func (m *Master) FileChord(FileName string) []int {
 	count := 0
 	idx := (int(hashSum))
 	ret := make([]int, 3)
+	fmt.Println("idx is " + strconv.Itoa(idx))
+	printMemberAliveList(m.MemberAliveList)
 	for count < 3 {
 		if m.MemberAliveList[idx] == true {
+			fmt.Println(idx)
 			ret[count] = idx + 1
-			idx += 1
 			count += 1
-			if idx == 10 {
-				idx = 0
-			}
+		}
+		idx += 1
+		if idx == 10 {
+			idx = 0
 		}
 	}
 	return ret
@@ -178,6 +191,7 @@ func (m *Master) ProcessLSReq(remoteAddr *net.UDPAddr, FileName string) {
 	if m.IsMaster == false {
 		return
 	}
+	log.Println("Received LS from node:" + FileName)
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		repList := metaInfo.ReplicaList
 		genReplyandSend(repList, "LS", FileName, remoteAddr)
@@ -251,11 +265,14 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	for i := range membership {
 		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
 	}
+	// printMemberAliveList(m.MemberAliveList)
+
 }
 
 func genReplyandSend(repList []int, cmd string, sdfsfile string, remoteAddr *net.UDPAddr) {
 	reply := geneReply(repList, cmd, sdfsfile)
 	b := util.RPCformat(*reply)
+	fmt.Println(remoteAddr.String())
 	util.MasterUDPSend(remoteAddr, b)
 }
 
@@ -272,4 +289,8 @@ func geneReply(repList []int, cmd string, sdfsfile string) *util.RPCMeta {
 func calTCP(ID int) string {
 	ip := util.CalculateIP(ID)
 	return ip + ":" + strconv.Itoa(rpcServerport)
+}
+
+func printMemberAliveList(in []bool) {
+	fmt.Println(in)
 }

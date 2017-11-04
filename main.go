@@ -2,6 +2,7 @@ package main
 
 import (
 	"SDFS/daemon"
+	"SDFS/master"
 	"log"
 	"time"
 )
@@ -15,6 +16,8 @@ func main() {
 	// only run on Server 1,2,3
 	if Daemon.ID == 1 || Daemon.ID == 2 || Daemon.ID == 3 {
 		// run master
+		Master := master.NewMaster()
+		go Master.UDPListener()
 	}
 
 	if Daemon.ID == 1 {
@@ -25,6 +28,7 @@ func main() {
 	// run on every Server
 	go Daemon.HandleStdIn()
 	go Daemon.UDPListener()
+	go Daemon.SDFSListener()
 
 	// Disseminate every 200ms
 	// originally 100ms

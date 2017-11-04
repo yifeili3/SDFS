@@ -29,11 +29,16 @@ func NewNode(myaddr string, taraddr string) *Node {
 }
 
 func (n *Node) ReadLocalFile(file string, ret *string) error {
-	fmt.Println("ReadLocalFIle in:" + file)
+	fmt.Println("ReadLocalFIle in  :" + file)
 	fin, err := ioutil.ReadFile(file)
-	checkError(err)
-	fmt.Printf("Read %s success\n", file)
-	*ret = string(fin)
+
+	fmt.Printf("Read %s success\nThe result is:%s", file, string(fin))
+	if err != nil {
+
+	} else {
+		*ret = string(fin)
+	}
+
 	return err
 }
 
@@ -53,7 +58,7 @@ func (n *Node) DeleteFile(file string, ret *string) error {
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
+		fmt.Printf("my Error: %s\n", err.Error())
 		//os.Exit(1)
 	}
 }

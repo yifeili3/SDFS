@@ -1,11 +1,11 @@
 package main
 
 import (
+	"SDFS/shareReadWrite"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
-	"shareReadWrite/shareReadWrite"
 )
 
 func main() {

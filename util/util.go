@@ -16,7 +16,7 @@ const (
 	fp             = 0
 	serverBase     = "172.22.154.132"
 	masterSendport = 8002
-	sdfsport       = 4004
+	sdfsport       = 4008
 )
 
 type RPCMeta struct {

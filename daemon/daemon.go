@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/rpc"
@@ -26,7 +25,8 @@ const (
 	contactListener = 4096
 	contactSender   = 4002
 	udpport         = 4000
-	sdfsport        = 4004
+	sdfsListener    = 4008
+	masterListener  = 4010
 	sdfsDir         = "/home/yifeili3/sdfs/"
 	localDir        = "/home/yifeili3/local/"
 )
@@ -90,7 +90,7 @@ func NewDaemon() (daemon *Daemon, err error) {
 	}
 
 	sdfsaddr := net.UDPAddr{
-		Port: sdfsport,
+		Port: sdfsListener,
 		IP:   net.ParseIP(ipAddr),
 	}
 	sdfsconn, err := net.ListenUDP("udp", &sdfsaddr)
@@ -118,11 +118,11 @@ func NewDaemon() (daemon *Daemon, err error) {
 	}
 	// fill member in MasterList
 	for i := 0; i < 3; i++ {
-		daemon.MasterList[i] = *member.NewMember(i+1, net.UDPAddr{IP: net.ParseIP(calculateIP(i + 1)), Port: sdfsport}, 0)
+		daemon.MasterList[i] = *member.NewMember(i+1, net.UDPAddr{IP: net.ParseIP(calculateIP(i + 1)), Port: masterListener}, 0)
 	}
 
 	/*   Initialize SDFS     */
-	daemon.clearSDFS()
+	//daemon.clearSDFS()
 
 	return daemon, err
 }
@@ -136,8 +136,10 @@ func (d *Daemon) HandleStdIn() {
 	// JOIN LEAVE LIST LISTID
 	for {
 		input, _ = inputReader.ReadString('\n')
-		log.Println("Get the input:" + input)
-		command := strings.Split(input, " ")
+
+		in := strings.Replace(input, "\n", "", -1)
+		log.Println("Get the input:" + in)
+		command := strings.Split(in, " ")
 		if len(command) == 1 {
 			if command[0] == "JOIN" {
 				d.joinGroup()
@@ -581,24 +583,28 @@ func calculateIP(id int) string {
 
 //SDFSListener listens message from master
 func (d *Daemon) SDFSListener() {
+	fmt.Println("sdfsnode: " + d.SDFSUDPAddr.String())
 	p := make([]byte, 8192)
 	for {
 		n, _, _ := d.SDFSConnection.ReadFromUDP(p)
 		if n == 0 {
 			continue
 		} else {
+			fmt.Println("SDFS: receive something")
 			var ret util.RPCMeta
 			err := json.Unmarshal(p[0:n], &ret)
 			if err != nil {
 				log.Println(err)
 			}
-
 			if ret.Command.Cmd == "PUT" {
+				fmt.Println("In sdfs put")
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
 				d.Msg <- ret
+			} else {
+				log.Println(ret.Command.Cmd)
 			}
 		}
 	}
@@ -609,11 +615,18 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	data := util.RPCMeta{Command: util.Message{Cmd: "PUT", SdfsFileName: sdfsFile}}
 	b := util.RPCformat(data)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
-	util.UDPSend(&targetAddr, b)
+	fmt.Println(d.MasterList[d.CurrentMasterID-1])
 
+	util.UDPSend(&targetAddr, b)
+	fmt.Println("Send to Master")
 	msg := <-d.Msg
+	fmt.Println("Receive from Master")
+
 	for i := range msg.ReplicaList {
+		fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
 		rpcTransferFile(msg.ReplicaList[i], localFile, sdfsFile)
+		// trail
+		break
 	}
 
 	data = util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
@@ -649,14 +662,12 @@ func (d *Daemon) delete(sdfsFile string) {
 
 func (d *Daemon) store() {
 	//read from daemon.File
-	cmd := "ls " + sdfsDir
-	lsCmd := exec.Command("bash", "-c", cmd)
-	cmdOut, _ := lsCmd.StdoutPipe()
-	lsCmd.Start()
-	outputBytes, _ := ioutil.ReadAll(cmdOut)
-	lsCmd.Wait()
-
-	fmt.Print(string(outputBytes))
+	cmd := exec.Command("ls", sdfsDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Println("ls error")
+	}
+	fmt.Printf("%s", string(out))
 	return
 }
 
@@ -715,8 +726,11 @@ func rpcTransferFile(serverID int, srcFile string, destFile string) {
 
 	var reply string
 	err = client.Call("Node.ReadLocalFile", destFile, &reply)
-	// fmt.Println("The reply is:" + reply)
-
+	fmt.Println("The reply is:" + reply)
+	if len(reply) == 0 {
+		log.Println("Error, no such file!")
+		return
+	}
 	n := &shareReadWrite.Node{}
 	cmd := &shareReadWrite.WriteCmd{File: srcFile, Input: reply}
 	n.WriteLocalFile(*cmd, &reply)
