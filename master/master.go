@@ -17,6 +17,13 @@ const (
 	deletePending     = 3
 )
 
+type Master struct {
+	MetaData        util.MetaMap
+	MemberAliveList []bool
+	Addr            net.UDPAddr
+	IsMaster        bool
+}
+
 func (r *RPCMeta) getMessage(msg *Message, reply *MetaInfo) error {
 
 	if msg.cmd == "PUT" {
@@ -49,7 +56,7 @@ func newMaster() (m *Master) {
 	m = &Master{
 		Addr:            addr,
 		MemberAliveList: make([]bool, 10),
-		MetaData:        make(MetaMap),
+		MetaData:        make(util.MetaMap),
 	}
 	for i := 0; i < 10; i++ {
 		m.MemberAliveList[i] = false
@@ -78,7 +85,7 @@ func (m *Master) UDPListener() {
 		if err != nil {
 			log.Println("Contact get UDP message err!", err)
 		}
-		var ret RPCMeta
+		var ret util.RPCMeta
 		err = json.Unmarshal(p[0:n], &ret)
 
 		if err != nil {
@@ -86,11 +93,11 @@ func (m *Master) UDPListener() {
 		} else {
 			if len(ret.Command.cmd) != 0 {
 				if ret.Command.cmd == "PUT" {
-
+					m.ProcessPUTReq(&remoteAddr, ret.Command.SdfsFileName)
 				} else if ret.Command.cmd == "GET" {
-
+					m.ProcessPUTReq(&remoteAddr, ret.Command.SdfsFileName)
 				} else if ret.Command.cmd == "LS" {
-
+					m.ProcessLSReq(&remoteAddr, ret.Command.SdfsFileName)
 				} else if ret.Command.cmd == "DELETE" {
 
 				} else if ret.Command.cmd == "PUTCOMFIRM" {
@@ -126,25 +133,10 @@ func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
 			metaInfo.Timestamp = tNow
 			replicaList := metaInfo.ReplicaList
 			// send the message back to remoteAddr about the replicalist
-			reply := &RPCMeta{
-				ReplicaList: replicaList,
-				Command: Message{
-					cmd:          "PUT",
-					sdfsFileName: FileName,
-				},
-			}
-			b, _ := json.Marshal(reply)
-			util.MasterUDPSend(remoteAddr, b)
+			genReplyandSend(replicaList, "PUT", FileName, remoteAddr)
 		} else {
 			// within 60s, sending back that need confirm
-			reply := &RPCMeta{
-				Command: Message{
-					cmd:          "PUTCOMFIRM",
-					sdfsFileName: FileName,
-				},
-			}
-			b, _ := json.Marshal(reply)
-			util.MasterUDPSend(remoteAddr, b)
+			genReplyandSend(make([]int, 0), "PUTCONFIRM", FileName, remoteAddr)
 		}
 
 	} else {
@@ -157,6 +149,8 @@ func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
 			State:       putPending,
 		}
 		// return the replist
+		genReplyandSend(repList, "PUT", FileName, remoteAddr)
+
 	}
 }
 
@@ -169,7 +163,7 @@ func (m *Master) FileChord(FileName string) []int {
 	ret := make([]int, 3)
 	for count < 3 {
 		if m.MemberAliveList[idx] == true {
-			ret[count] = idx
+			ret[count] = idx + 1
 			idx += 1
 			count += 1
 			if idx == 10 {
@@ -178,5 +172,60 @@ func (m *Master) FileChord(FileName string) []int {
 		}
 	}
 	return ret
+}
 
+func (m *Master) ProcessGETReq(remoteAddr *UDPAddr, FileName string) {
+	if m.isMaster == false {
+		return
+	}
+
+	if metaInfo, exist := m.MetaData[FileName]; exist {
+		// if the meata info is stored in the map
+		repList := metaInfo.ReplicaList
+		genReplyandSend(repList, "GET", FileName, remoteAddr)
+	} else {
+		// this file is not in distributed system
+		genReplyandSend(make([]int, 0), "GETNULL", FileName, remoteAddr)
+	}
+}
+
+func (m *Master) ProcessLSReq(remoteAddr *UDPAddr, FileName string) {
+	if m.IsMaster == false {
+		return
+	}
+	if metaInfo, exist := m.MetaData[FileName]; exist {
+		repList := metaInfo.ReplicaList
+		genReplyandSend(repList, "LS", FileName, remoteAddr)
+	} else {
+		// this file does not exist
+		genReplyandSend(make([]int, 0), "LSNULL", FileName, remoteAddr)
+	}
+}
+
+func (m *Master) ProcessDeleteReq(remoteAddr *UDPAddr, FileName string) {
+	if m.IsMaster == false {
+		return
+	}
+	if metaInfo, exist := m.MetaData[FileName]; exist {
+		repList := metaInfo.ReplicaList
+		for {
+
+		}
+	}
+
+}
+func genReplyandSend(repList []int, cmd string, sdfsfile string, remoteAddr *UDPAddr) {
+	reply := geneReply(repList, cmd, sdfsfile)
+	b := util.RPCformat(*reply)
+	util.MasterUDPSend(remoteAddr, b)
+}
+
+func geneReply(repList []int, cmd string, sdfsfile string) *util.RPCMeta {
+	return &util.RPCMeta{
+		ReplicaList: repList,
+		Command: util.Message{
+			Cmd:          cmd,
+			SdfsFileName: sdfsfile,
+		},
+	}
 }
