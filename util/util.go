@@ -1,7 +1,7 @@
 package util
 
 import (
-	"Membership/member"
+	"SDFS/member"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,17 +16,19 @@ const (
 	fp             = 0
 	serverBase     = "172.22.154.132"
 	masterSendport = 8002
+	sdfsport       = 4004
 )
-
-type Message struct {
-	Cmd          string
-	SdfsFileName string
-}
 
 type RPCMeta struct {
 	ReplicaList []int
 	Command     Message
 	Metadata    map[string]MetaInfo
+	Membership  []member.Node
+}
+
+type Message struct {
+	Cmd          string
+	SdfsFileName string
 }
 
 type MetaInfo struct {
@@ -35,8 +37,6 @@ type MetaInfo struct {
 	Timestamp   int64
 	State       int
 }
-
-type MetaMap map[string]*MetaInfo
 
 // struct to be used by JSON Marshal function
 type Command string
@@ -95,7 +95,11 @@ func MasterUDPSend(dstAddr *net.UDPAddr, info []byte) {
 		IP:   net.ParseIP(WhereAmI()),
 		Port: masterSendport,
 	}
-	conn, err := net.DialUDP("udp", &srcAddr, dstAddr)
+	dst := &net.UDPAddr{
+		Port: sdfsport,
+		IP:   dstAddr.IP,
+	}
+	conn, err := net.DialUDP("udp", &srcAddr, dst)
 	if err != nil {
 		fmt.Println("Error in master sending UDP:", err)
 	}

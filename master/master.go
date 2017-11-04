@@ -1,6 +1,7 @@
 package master
 
 import (
+	"SDFS/member"
 	"SDFS/util"
 	"encoding/json"
 	"hash/fnv"
@@ -21,11 +22,13 @@ const (
 )
 
 type Master struct {
-	MetaData        util.MetaMap
+	MetaData        MetaMap
 	MemberAliveList []bool
 	Addr            net.UDPAddr
 	IsMaster        bool
 }
+
+type MetaMap map[string]*MetaInfo
 
 func getAvailableNode() {
 
@@ -42,7 +45,7 @@ func newMaster() (m *Master) {
 	m = &Master{
 		Addr:            addr,
 		MemberAliveList: make([]bool, 10),
-		MetaData:        make(util.MetaMap),
+		MetaData:        make(MetaMap),
 	}
 	for i := 0; i < 10; i++ {
 		m.MemberAliveList[i] = false
@@ -90,7 +93,7 @@ func (m *Master) UDPListener() {
 				} else if ret.Command.Cmd == "PUTACK" {
 					m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
 				}
-			} else {
+			} else if len(ret.Membership) != 0 {
 
 			}
 		}
@@ -242,6 +245,12 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 		metaInfo.State = putDone
 	} else {
 		log.Println("Error, get the ack of put but no such file")
+	}
+}
+
+func (m *Master) UpdateAlivelist(membership []member.Node) {
+	for i := range membership {
+		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
 	}
 }
 

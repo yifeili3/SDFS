@@ -2,7 +2,6 @@ package main
 
 import (
 	"Membership/daemon"
-	"SDFS/master"
 	"log"
 	"time"
 )
@@ -15,7 +14,7 @@ func main() {
 	}
 	// only run on Server 1,2,3
 	if Daemon.ID == 1 || Daemon.ID == 2 || Daemon.ID == 3 {
-		go Daemon.RunMaster()
+		// run master
 	}
 
 	if Daemon.ID == 1 {
