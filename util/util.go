@@ -13,8 +13,37 @@ import (
 )
 
 const (
-	fp = 0
+	fp             = 0
+	serverBase     = "172.22.154.132"
+	masterSendport = 8002
 )
+
+type Message struct {
+	cmd          string
+	sdfsFileName string
+}
+
+type RPCMeta struct {
+	ReplicaList []int
+	Command     Message
+	Metadata    map[string]MetaInfo
+}
+
+type MetaInfo struct {
+	Filename    string
+	ReplicaList []int
+	Timestamp   int64
+	State       int
+}
+
+type MetaMap map[string]*MetaInfo
+
+type Master struct {
+	MetaData        MetaMap
+	MemberAliveList []bool
+	Addr            net.UDPAddr
+	isMaster        bool
+}
 
 // struct to be used by JSON Marshal function
 type Command string
@@ -68,6 +97,19 @@ func ContactUDPSend(dstAddr *net.UDPAddr, info []byte) {
 	conn.Write(info)
 }
 
+func MasterUDPSend(dstAddr *net.UDPAddr, info []byte) {
+	srcAddr := net.UDPAddr{
+		IP:   net.ParseIP(WhereAmI()),
+		Port: masterSendport,
+	}
+	conn, err := net.DialUDP("udp", &srcAddr, dstAddr)
+	if err != nil {
+		fmt.Println("Error in master sending UDP:", err)
+	}
+	defer conn.Close()
+	conn.Write(info)
+}
+
 // FormatString is a function that format the input string into []byte
 func FormatString(input Command) []byte {
 	sendMsg := IncomingMessage{Cmd: input}
@@ -108,4 +150,40 @@ func WriteLog(ID int, input string) {
 	writeTime := time.Now().String()
 	f.WriteString("[" + writeTime + "] " + input + "\n")
 	f.Sync()
+}
+
+// Get self ID based on ip address
+func WhoAmI() int {
+	ipaddr := WhereAmI()
+	return CalculateID(ipaddr)
+}
+
+// Get current ip address of the machine
+func WhereAmI() string {
+	addrs, _ := net.InterfaceAddrs()
+	var ipaddr string
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				ipaddr = ipnet.IP.String()
+			}
+		}
+	}
+	return ipaddr
+}
+
+//Map current ip address base off vm1 ip address
+func CalculateID(serverAddr string) int {
+	addr, err := strconv.Atoi(serverAddr[12:14])
+	if err != nil {
+		log.Fatal(">Wrong ip Address")
+	}
+	base, _ := strconv.Atoi(serverBase[12:14])
+	return addr - base + 1
+}
+
+//Map current id base off vm1 ip address
+func CalculateIP(id int) string {
+	base, _ := strconv.Atoi(serverBase[12:14])
+	return serverBase[0:12] + strconv.Itoa(base+id-1)
 }
