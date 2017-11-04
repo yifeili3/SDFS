@@ -19,8 +19,8 @@ const (
 )
 
 type Message struct {
-	cmd          string
-	sdfsFileName string
+	Cmd          string
+	SdfsFileName string
 }
 
 type RPCMeta struct {
@@ -42,7 +42,7 @@ type Master struct {
 	MetaData        MetaMap
 	MemberAliveList []bool
 	Addr            net.UDPAddr
-	isMaster        bool
+	IsMaster        bool
 }
 
 // struct to be used by JSON Marshal function
