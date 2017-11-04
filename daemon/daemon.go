@@ -3,10 +3,12 @@ package daemon
 import (
 	"Membership/member"
 	"Membership/util"
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -133,9 +135,12 @@ func (d *Daemon) RunMaster() {
 // Thread to wait for standard input
 func (d *Daemon) HandleStdIn() {
 	var input string
+
+	inputReader := bufio.NewReader(os.Stdin)
 	// JOIN LEAVE LIST LISTID
 	for {
-		fmt.Scanln(&input)
+		fmt.Println("Enter the operation:")
+		input, _ = inputReader.ReadString('\n')
 
 		command := strings.Split(input, " ")
 		if len(command) == 1 {
