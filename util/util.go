@@ -38,13 +38,6 @@ type MetaInfo struct {
 
 type MetaMap map[string]*MetaInfo
 
-type Master struct {
-	MetaData        MetaMap
-	MemberAliveList []bool
-	Addr            net.UDPAddr
-	IsMaster        bool
-}
-
 // struct to be used by JSON Marshal function
 type Command string
 

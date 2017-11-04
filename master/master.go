@@ -6,6 +6,8 @@ import (
 	"hash/fnv"
 	"log"
 	"net"
+	"net/rpc"
+	"strconv"
 	"time"
 )
 
@@ -15,6 +17,7 @@ const (
 	putPending        = 1
 	putDone           = 2
 	deletePending     = 3
+	rpcServerport     = 4004
 )
 
 type Master struct {
@@ -22,23 +25,6 @@ type Master struct {
 	MemberAliveList []bool
 	Addr            net.UDPAddr
 	IsMaster        bool
-}
-
-func (r *RPCMeta) getMessage(msg *Message, reply *MetaInfo) error {
-
-	if msg.cmd == "PUT" {
-		*reply = r.MetaData[msg.sdfsFileName]
-	} else if msg.cmd == "GET" {
-		*reply = getAvailableNode()
-	} else if msg.cmd == "DELETE" {
-
-	} else if msg.cmd == "LIST" {
-
-	} else {
-
-	}
-
-	return nil
 }
 
 func getAvailableNode() {
@@ -64,7 +50,6 @@ func newMaster() (m *Master) {
 	m.MemberAliveList[ID-1] = true
 
 	return m
-
 }
 
 func (m *Master) UDPListener() {
@@ -91,23 +76,19 @@ func (m *Master) UDPListener() {
 		if err != nil {
 			log.Println("Get some unknow UDP message")
 		} else {
-			if len(ret.Command.cmd) != 0 {
-				if ret.Command.cmd == "PUT" {
-					m.ProcessPUTReq(&remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.cmd == "GET" {
-					m.ProcessPUTReq(&remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.cmd == "LS" {
-					m.ProcessLSReq(&remoteAddr, ret.Command.SdfsFileName)
-				} else if ret.Command.cmd == "DELETE" {
-
-				} else if ret.Command.cmd == "PUTCOMFIRM" {
-
-				} else if ret.Command.cmd == "PUTACK" {
-
-				} else if ret.Command.cmd == "GETACK" {
-
-				} else if ret.Command.cmd == "DELETEACK" {
-
+			if len(ret.Command.Cmd) != 0 {
+				if ret.Command.Cmd == "PUT" {
+					m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
+				} else if ret.Command.Cmd == "GET" {
+					m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
+				} else if ret.Command.Cmd == "LS" {
+					m.ProcessLSReq(remoteAddr, ret.Command.SdfsFileName)
+				} else if ret.Command.Cmd == "DELETE" {
+					m.ProcessDeleteReq(remoteAddr, ret.Command.SdfsFileName)
+				} else if ret.Command.Cmd == "PUTCOMFIRM" {
+					m.ProcessPUTComfirm(remoteAddr, ret.Command.SdfsFileName)
+				} else if ret.Command.Cmd == "PUTACK" {
+					m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
 				}
 			} else {
 
@@ -118,8 +99,8 @@ func (m *Master) UDPListener() {
 
 }
 
-func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
-	if m.isMaster == false {
+func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
+	if m.IsMaster == false {
 		return
 	}
 	// check if this file already in the metadata
@@ -135,6 +116,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
 			// send the message back to remoteAddr about the replicalist
 			genReplyandSend(replicaList, "PUT", FileName, remoteAddr)
 		} else {
+			metaInfo.Timestamp = tNow
 			// within 60s, sending back that need confirm
 			genReplyandSend(make([]int, 0), "PUTCONFIRM", FileName, remoteAddr)
 		}
@@ -142,7 +124,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *UDPAddr, FileName string) {
 	} else {
 		// calculate the file position for replica and new a new metadata pair
 		repList := m.FileChord(FileName)
-		m.MetaData[FileName] = &MetaInfo{
+		m.MetaData[FileName] = &util.MetaInfo{
 			Filename:    FileName,
 			ReplicaList: repList,
 			Timestamp:   time.Now().Unix(),
@@ -159,7 +141,7 @@ func (m *Master) FileChord(FileName string) []int {
 	h.Write([]byte(FileName))
 	hashSum := h.Sum32() % 10
 	count := 0
-	idx := hashSum
+	idx := (int(hashSum))
 	ret := make([]int, 3)
 	for count < 3 {
 		if m.MemberAliveList[idx] == true {
@@ -174,8 +156,8 @@ func (m *Master) FileChord(FileName string) []int {
 	return ret
 }
 
-func (m *Master) ProcessGETReq(remoteAddr *UDPAddr, FileName string) {
-	if m.isMaster == false {
+func (m *Master) ProcessGETReq(remoteAddr *net.UDPAddr, FileName string) {
+	if m.IsMaster == false {
 		return
 	}
 
@@ -189,7 +171,7 @@ func (m *Master) ProcessGETReq(remoteAddr *UDPAddr, FileName string) {
 	}
 }
 
-func (m *Master) ProcessLSReq(remoteAddr *UDPAddr, FileName string) {
+func (m *Master) ProcessLSReq(remoteAddr *net.UDPAddr, FileName string) {
 	if m.IsMaster == false {
 		return
 	}
@@ -202,19 +184,68 @@ func (m *Master) ProcessLSReq(remoteAddr *UDPAddr, FileName string) {
 	}
 }
 
-func (m *Master) ProcessDeleteReq(remoteAddr *UDPAddr, FileName string) {
+func (m *Master) ProcessDeleteReq(remoteAddr *net.UDPAddr, FileName string) {
 	if m.IsMaster == false {
 		return
 	}
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		repList := metaInfo.ReplicaList
-		for {
+		count := 0
+		for count := 0; count < 3; count++ {
+			tcpAddr := calTCP(repList[count])
+			client, err := rpc.DialHTTP("tcp", tcpAddr)
+			if err != nil {
+				log.Printf(">Server dialing error")
+				return
+			}
+			// getFileContent := shareReadWrite.NewNode("localhost:9876", "localhost:10030")
+			var reply string
+			err = client.Call("Node.DeleteFile", FileName, &reply)
+			// fmt.Println("The reply is:" + reply)
 
 		}
+		delete(m.MetaData, FileName)
+	} else {
+		// no such file, do nothing
 	}
 
 }
-func genReplyandSend(repList []int, cmd string, sdfsfile string, remoteAddr *UDPAddr) {
+
+func (m *Master) ProcessPUTComfirm(remoteAddr *net.UDPAddr, FileName string) {
+	if m.IsMaster == false {
+		return
+	}
+	if metaInfo, exist := m.MetaData[FileName]; exist {
+		metaInfo.State = putPending
+		metaInfo.Timestamp = time.Now().Unix()
+		replicaList := metaInfo.ReplicaList
+		genReplyandSend(replicaList, "PUT", FileName, remoteAddr)
+	} else {
+		// calculate the file position for replica and new a new metadata pair
+		repList := m.FileChord(FileName)
+		m.MetaData[FileName] = &util.MetaInfo{
+			Filename:    FileName,
+			ReplicaList: repList,
+			Timestamp:   time.Now().Unix(),
+			State:       putPending,
+		}
+		// return the replist
+		genReplyandSend(repList, "PUT", FileName, remoteAddr)
+	}
+}
+
+func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
+	if m.IsMaster == false {
+		return
+	}
+	if metaInfo, exist := m.MetaData[FileName]; exist {
+		metaInfo.State = putDone
+	} else {
+		log.Println("Error, get the ack of put but no such file")
+	}
+}
+
+func genReplyandSend(repList []int, cmd string, sdfsfile string, remoteAddr *net.UDPAddr) {
 	reply := geneReply(repList, cmd, sdfsfile)
 	b := util.RPCformat(*reply)
 	util.MasterUDPSend(remoteAddr, b)
@@ -228,4 +259,9 @@ func geneReply(repList []int, cmd string, sdfsfile string) *util.RPCMeta {
 			SdfsFileName: sdfsfile,
 		},
 	}
+}
+
+func calTCP(ID int) string {
+	ip := util.CalculateIP(ID)
+	return ip + ":" + strconv.Itoa(rpcServerport)
 }
