@@ -399,6 +399,7 @@ func (m *Master) UpdateNewMaster() {
 }
 
 func (m *Master) FailTransferRep(failIndex int) {
+	fmt.Printf("Node %d's data needs to be repaired\n", failIndex+1)
 	fileNames := []string{}
 	for fileName, metaInfo := range m.MetaData {
 		for idx := range metaInfo.ReplicaList {
@@ -407,6 +408,7 @@ func (m *Master) FailTransferRep(failIndex int) {
 				metaInfo.ReplicaList[idx] = -1
 				metaInfo.State = repairPending
 				metaInfo.Timestamp = time.Now()
+				fmt.Printf("File %s needs to be repaired\n", fileName)
 			}
 		}
 	}
