@@ -311,21 +311,46 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 }
 
 func (m *Master) UpdateAlivelist(membership []member.Node) {
+	masterCount := [3]int{0, 0, 0}
 	for i := range membership {
-		stateBefore := m.MemberAliveList[i]
+		//stateBefore := m.MemberAliveList[i]
 		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
-		stateAfter := m.MemberAliveList[i]
+		masterCount[membership[i].CurrentMasterID-1]++
 
-		if stateBefore == true && stateAfter == false {
-			// need up date file to other nodes
-			m.FailTransferRep(i)
-			// if master fails
-			if i+1 == m.MyMaster {
-				m.UpdateNewMaster()
+		//stateAfter := m.MemberAliveList[i]
+		/*
+			if stateBefore == true && stateAfter == false {
+				// need up date file to other nodes
+				m.FailTransferRep(i)
+				// if master fails
+				if i+1 == m.MyMaster {
+					m.UpdateNewMaster()
+				}
 			}
-		}
+		*/
 
 	}
+	if masterCount[0] >= masterCount[1] {
+		if masterCount[0] >= masterCount[2] {
+			m.MyMaster = 1
+		} else {
+			m.MyMaster = 3
+		}
+	} else { // 1>0
+		if masterCount[1] >= masterCount[2] {
+			// 1>2 , it's 1
+			m.MyMaster = 2
+		} else {
+			// 2>1
+			m.MyMaster = 3
+		}
+	}
+	if m.MyMaster == util.WhoAmI() {
+		m.IsMaster = true
+	} else {
+		m.IsMaster = false
+	}
+
 	// printMemberAliveList(m.MemberAliveList)
 }
 

@@ -771,6 +771,7 @@ func rpcTransferFile(serverID int, srcFile string, destFile string) (er int) {
 	if err != nil {
 		log.Printf(">Server dialing error")
 		er := -1
+		return er
 	}
 
 	var reply string
@@ -779,6 +780,7 @@ func rpcTransferFile(serverID int, srcFile string, destFile string) (er int) {
 	if len(reply) == 0 {
 		log.Println("Error, no such file!")
 		er := -1
+		return er
 	}
 	n := &shareReadWrite.Node{}
 	cmd := &shareReadWrite.WriteCmd{File: srcFile, Input: reply}
