@@ -96,7 +96,7 @@ func (m *Master) UDPListener() {
 		// *************************bug here, remote addr  wrong port
 		n, remoteAddr, err := conn.ReadFromUDP(p)
 		remoteAddr.Port = sdfsListener
-		// fmt.Println("Master: " + remoteAddr.String())
+		fmt.Println("Master: " + remoteAddr.String())
 		if err != nil {
 			log.Println("Contact get UDP message err!", err)
 		}
