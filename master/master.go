@@ -373,6 +373,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 		}
 	}
 	if m.MyMaster == util.WhoAmI() {
+		fmt.Println("Update myself to be master.")
 		m.IsMaster = true
 	} else {
 		m.IsMaster = false
