@@ -486,9 +486,6 @@ func geneMeta(Metadata MetaMap, srcID int, cmd string) {
 	}
 	rpcmsg := &util.RPCMeta{
 		Metadata: metamap,
-		Command: util.Message{
-			Cmd: cmd,
-		},
 	}
 	b := util.RPCformat(*rpcmsg)
 	remoteDst := &net.UDPAddr{
