@@ -452,7 +452,7 @@ func (m *Master) FindAvailNode(input []int) int {
 			break
 		}
 		start--
-		if start == -1 {
+		if start == 0 {
 			start = 10
 		}
 	}
@@ -472,7 +472,7 @@ func (m *Master) FindAvailNode(input []int) int {
 				break
 			}
 			start--
-			if start == -1 {
+			if start == 0 {
 				start = 10
 			}
 		}
