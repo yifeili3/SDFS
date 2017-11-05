@@ -403,6 +403,7 @@ func (m *Master) FailTransferRep(failIndex int) {
 	fmt.Printf("Node %d's data needs to be repaired\n", failIndex+1)
 	fileNames := []string{}
 	for fileName, metaInfo := range m.MetaData {
+		fmt.Println(fileName)
 		for idx := range metaInfo.ReplicaList {
 			if metaInfo.ReplicaList[idx] == failIndex+1 {
 				fileNames = append(fileNames, fileName)
