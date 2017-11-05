@@ -449,6 +449,10 @@ func (m *Master) FindAvailNode(input []int) int {
 			fmt.Printf("Find the first node %d", start)
 			break
 		}
+		start--
+		if start == -1 {
+			start = 10
+		}
 	}
 	if len(replicaNode) == 1 {
 		return start
@@ -464,6 +468,10 @@ func (m *Master) FindAvailNode(input []int) int {
 		for {
 			if m.MemberAliveList[start-1] == true {
 				break
+			}
+			start--
+			if start == -1 {
+				start = 10
 			}
 		}
 		return start
