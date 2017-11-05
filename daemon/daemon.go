@@ -645,20 +645,24 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	fmt.Println("Send to Master")
 	msg := <-d.Msg
 	fmt.Println("Receive from Master")
-
+	count := 0
 	for i := range msg.ReplicaList {
+
 		fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
 		err := rpcPutFile(msg.ReplicaList[i], localFile, sdfsDir+sdfsFile)
 		if err == -1 {
 			log.Println("Put file error")
+			break
 		}
-		// trail
+		count++
 	}
 
-	data = util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
-	b = util.RPCformat(data)
-	targetAddr = d.MasterList[d.CurrentMasterID-1].UDP
-	util.UDPSend(&targetAddr, b)
+	if count == 3 {
+		data = util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
+		b = util.RPCformat(data)
+		targetAddr = d.MasterList[d.CurrentMasterID-1].UDP
+		util.UDPSend(&targetAddr, b)
+	}
 
 }
 

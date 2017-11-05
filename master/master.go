@@ -242,8 +242,13 @@ func (m *Master) ProcessLSReq(remoteAddr *net.UDPAddr, FileName string) {
 	}
 	log.Println("Received LS from node:" + FileName)
 	if metaInfo, exist := m.MetaData[FileName]; exist {
-		repList := metaInfo.ReplicaList
-		genReplyandSend(repList, "LS", FileName, remoteAddr)
+		if metaInfo.State == putDone {
+			repList := metaInfo.ReplicaList
+			genReplyandSend(repList, "LS", FileName, remoteAddr)
+		} else {
+			genReplyandSend(make([]int, 0), "LSNULL", FileName, remoteAddr)
+		}
+
 	} else {
 		// this file does not exist
 		genReplyandSend(make([]int, 0), "LSNULL", FileName, remoteAddr)
