@@ -29,8 +29,8 @@ const (
 	masterListener  = 4010
 	sdfsDir         = "/home/yifeili3/sdfs/"
 	localDir        = "/home/yifeili3/local/"
-	FIRSTPUT        = 1
-	SECONDPUT       = 2
+	FIRSTPUT        = 0
+	SECONDPUT       = 1
 )
 
 // Daemon process
@@ -123,6 +123,7 @@ func NewDaemon() (daemon *Daemon, err error) {
 		Msg:             make(chan util.RPCMeta),
 		Confirm:         make(chan bool),
 		Timeout:         make(chan bool),
+		PutState:        0,
 	}
 	//fill member in memberlist
 	for i := 0; i < 10; i++ {
@@ -163,7 +164,6 @@ func (d *Daemon) HandleStdIn() {
 				log.Println("Please confirm your put first")
 				continue
 			}
-
 		} else {
 			if len(command) == 1 {
 				if command[0] == "JOIN" {
