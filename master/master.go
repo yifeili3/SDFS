@@ -62,15 +62,17 @@ func (m *Master) DisseminateMeta() {
 		if m.IsMaster == false {
 			continue
 		} else {
-			fmt.Printf("My master is %d\n", m.MyMaster)
+			//fmt.Printf("My master is %d\n", m.MyMaster)
 			// send message to other two backup masters
 			for i := 0; i < 3; i++ {
+				//fmt.Println("Finding a master target\n")
 				if m.MemberAliveList[i] == true && i+1 != myID {
 					fmt.Printf("Sending metadata to %d\n", i+1)
 					geneMeta(m.MetaData, i+1, "METADATA")
 				}
 			}
 		}
+		time.Sleep(time.Millisecond * 100)
 	}
 
 }

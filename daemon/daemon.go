@@ -338,7 +338,6 @@ func (d *Daemon) UpdateAndDisseminate() {
 	}
 
 	d.MembershipList[d.ID-1].CurrentMasterID = d.CurrentMasterID
-	fmt.Println("New Master:" + strconv.Itoa(d.CurrentMasterID))
 
 	b := util.FormatMemberlist(d.MembershipList)
 	for i := range d.SendList {
