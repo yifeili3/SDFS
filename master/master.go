@@ -436,7 +436,7 @@ func (m *Master) FindAvailNode(input []int) int {
 			replicaNode = append(replicaNode, input[idx])
 		}
 	}
-
+	fmt.Println(replicaNode)
 	ID := replicaNode[0]
 	var start int
 	if ID-1 > 0 {
@@ -444,7 +444,9 @@ func (m *Master) FindAvailNode(input []int) int {
 	} else {
 		start = 10
 	}
+
 	for {
+		fmt.Println(start)
 		if m.MemberAliveList[start-1] == true {
 			fmt.Printf("Find the first node %d", start)
 			break
