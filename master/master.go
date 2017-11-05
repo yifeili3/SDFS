@@ -59,6 +59,7 @@ func NewMaster() (m *Master) {
 func (m *Master) DisseminateMeta() {
 	myID := util.WhoAmI()
 	for {
+		time.Sleep(time.Millisecond * 200)
 		if m.IsMaster == false {
 			continue
 		} else {
@@ -72,7 +73,7 @@ func (m *Master) DisseminateMeta() {
 				}
 			}
 		}
-		time.Sleep(time.Millisecond * 200)
+
 	}
 
 }
