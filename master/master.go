@@ -95,8 +95,7 @@ func (m *Master) UDPListener() {
 	for {
 		// *************************bug here, remote addr  wrong port
 		n, remoteAddr, err := conn.ReadFromUDP(p)
-		fmt.Println("Master: " + remoteAddr.String())
-		remoteAddr.Port = sdfsListener
+		// fmt.Println("Master: " + remoteAddr.String())
 
 		if err != nil {
 			log.Println("Contact get UDP message err!", err)
@@ -106,11 +105,14 @@ func (m *Master) UDPListener() {
 		} else {
 			var ret util.RPCMeta
 			err = json.Unmarshal(p[0:n], &ret)
-
+			if remoteAddr.Port == 8002 {
+				fmt.Println(len(ret.Metadata))
+			}
 			if err != nil {
 				log.Println("Get some unknow UDP message")
 			} else {
 				if len(ret.Command.Cmd) != 0 {
+					remoteAddr.Port = sdfsListener
 					if ret.Command.Cmd == "PUT" {
 						m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "GET" {
