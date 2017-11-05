@@ -156,9 +156,10 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		// it's a update operation
 		// check if this operation is in 1:00 of last call
-		tNow := time.Now().Unix()
-		tInterval := metaInfo.Timestamp - tNow
-		if tInterval > 60 {
+		tNow := time.Now()
+		tInterval := tNow.Sub(metaInfo.Timestamp)
+		log.Printf("meta's timestamp is %d, tNow is %d", metaInfo.Timestamp, tNow)
+		if tInterval > time.Duration(60)*time.Second {
 			metaInfo.State = putPending
 			metaInfo.Timestamp = tNow
 			replicaList := metaInfo.ReplicaList
@@ -178,7 +179,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 		m.MetaData[FileName] = &util.MetaInfo{
 			Filename:    FileName,
 			ReplicaList: repList,
-			Timestamp:   time.Now().Unix(),
+			Timestamp:   time.Now(),
 			State:       putPending,
 		}
 		// return the replist
@@ -287,7 +288,7 @@ func (m *Master) ProcessPUTComfirm(remoteAddr *net.UDPAddr, FileName string) {
 	}
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		metaInfo.State = putPending
-		metaInfo.Timestamp = time.Now().Unix()
+		metaInfo.Timestamp = time.Now()
 		replicaList := metaInfo.ReplicaList
 		genReplyandSend(replicaList, "PUT", FileName, remoteAddr)
 	} else {
@@ -296,7 +297,7 @@ func (m *Master) ProcessPUTComfirm(remoteAddr *net.UDPAddr, FileName string) {
 		m.MetaData[FileName] = &util.MetaInfo{
 			Filename:    FileName,
 			ReplicaList: repList,
-			Timestamp:   time.Now().Unix(),
+			Timestamp:   time.Now(),
 			State:       putPending,
 		}
 		// return the replist
@@ -376,7 +377,7 @@ func (m *Master) FailTransferRep(failIndex int) {
 				fileNames = append(fileNames, fileName)
 				metaInfo.ReplicaList[idx] = -1
 				metaInfo.State = repairPending
-				metaInfo.Timestamp = time.Now().Unix()
+				metaInfo.Timestamp = time.Now()
 			}
 		}
 	}
@@ -406,7 +407,7 @@ func (m *Master) FindAvailNode(input []int) int {
 	if ID-1 > 0 {
 		start = ID - 1
 	} else {
-		start = 9
+		start = 10
 	}
 	for {
 		if m.MemberAliveList[start-1] == true {
@@ -422,7 +423,7 @@ func (m *Master) FindAvailNode(input []int) int {
 		if ID-1 > 0 {
 			start = ID - 1
 		} else {
-			start = 9
+			start = 10
 		}
 		for {
 			if m.MemberAliveList[start-1] == true {
