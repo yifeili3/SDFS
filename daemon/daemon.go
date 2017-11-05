@@ -648,9 +648,9 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 
 	for i := range msg.ReplicaList {
 		fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
-		err := rpcTransferFile(msg.ReplicaList[i], localFile, sdfsFile)
+		err := rpcPutFile(msg.ReplicaList[i], localFile, sdfsDir+sdfsFile)
 		if err == -1 {
-			log.Println("Transfer file error")
+			log.Println("Put file error")
 		}
 		// trail
 		break
@@ -660,7 +660,7 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	b = util.RPCformat(data)
 	targetAddr = d.MasterList[d.CurrentMasterID-1].UDP
 	util.UDPSend(&targetAddr, b)
-	log.Println("PUT " + sdfsFile + " success")
+
 }
 
 func (d *Daemon) get(sdfsFile string, localFile string) {
@@ -675,9 +675,9 @@ func (d *Daemon) get(sdfsFile string, localFile string) {
 		return
 	}
 	// get file from sdfs
-	err := rpcTransferFile(msg.ReplicaList[0], sdfsFile, localFile)
+	err := rpcGetFile(msg.ReplicaList[0], localFile, sdfsDir+sdfsFile)
 	if err == -1 {
-		log.Println("Transfer file error")
+		log.Println("Get file error")
 	} else {
 		log.Println("GET " + sdfsFile + " success")
 	}
@@ -686,7 +686,7 @@ func (d *Daemon) get(sdfsFile string, localFile string) {
 func (d *Daemon) repair(msg util.RPCMeta) {
 	for i := range msg.ReplicaList {
 		if msg.ReplicaList[i] != -1 {
-			err := rpcTransferFile(msg.ReplicaList[i], msg.Command.SdfsFileName, sdfsDir+msg.Command.SdfsFileName)
+			err := rpcGetFile(msg.ReplicaList[i], sdfsDir+msg.Command.SdfsFileName, sdfsDir+msg.Command.SdfsFileName)
 			if err == -1 {
 				log.Println("Transfer file error")
 			}
@@ -764,7 +764,7 @@ func (d *Daemon) updateCurrentMaster() {
 	d.CurrentMasterID = master
 }
 
-func rpcTransferFile(serverID int, srcFile string, destFile string) (er int) {
+func rpcGetFile(serverID int, localfile string, sdfsfile string) (er int) {
 	log.Println("Start Getting File")
 	client, err := rpc.DialHTTP("tcp", calculateIP(serverID)+":9876")
 	if err != nil {
@@ -774,7 +774,7 @@ func rpcTransferFile(serverID int, srcFile string, destFile string) (er int) {
 	}
 
 	var reply string
-	err = client.Call("Node.ReadLocalFile", destFile, &reply)
+	err = client.Call("Node.ReadLocalFile", sdfsfile, &reply)
 	fmt.Println("The reply is:" + reply)
 	if len(reply) == 0 {
 		log.Println("Error, no such file!")
@@ -782,7 +782,30 @@ func rpcTransferFile(serverID int, srcFile string, destFile string) (er int) {
 		return er
 	}
 	n := &shareReadWrite.Node{}
-	cmd := &shareReadWrite.WriteCmd{File: srcFile, Input: reply}
+	cmd := &shareReadWrite.WriteCmd{File: localfile, Input: reply}
 	n.WriteLocalFile(*cmd, &reply)
+	return er
+}
+
+func rpcPutFile(serverID int, localfile string, sdfsfile string) (er int) {
+	log.Println("Start Putting File")
+	client, err := rpc.DialHTTP("tcp", calculateIP(serverID)+":9876")
+	if err != nil {
+		log.Printf(">Server dialing error")
+		er := -1
+		return er
+	}
+
+	var reply string
+	cmd := &shareReadWrite.WriteCmd{File: sdfsfile, Input: reply}
+	err = client.Call("Node.WriteLocalFile", cmd, &reply)
+	fmt.Println("The reply is:" + reply)
+	if len(reply) == 0 {
+		log.Println("Error, no such file!")
+		er := -1
+		return er
+	}
+	n := &shareReadWrite.Node{}
+	n.ReadLocalFile(localfile, &reply)
 	return er
 }
