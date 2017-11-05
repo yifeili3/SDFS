@@ -171,7 +171,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 	if m.IsMaster == false {
 		return
 	}
-	fmt.Println("In master put")
+	//fmt.Println("In master put")
 	// check if this file already in the metadata
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		// it's a update operation
@@ -190,11 +190,11 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 			// within 60s, sending back that need confirm
 			genReplyandSend(make([]int, 0), "PUTCONFIRM", FileName, remoteAddr)
 		}
-		fmt.Println("In master put 1")
+		//fmt.Println("In master put 1")
 
 	} else {
 		// calculate the file position for replica and new a new metadata pair
-		fmt.Println("In master put 2")
+		//fmt.Println("In master put 2")
 		repList := m.FileChord(FileName)
 		m.MetaData[FileName] = &util.MetaInfo{
 			Filename:    FileName,
@@ -205,7 +205,7 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 		// return the replist
 		genReplyandSend(repList, "PUT", FileName, remoteAddr)
 	}
-	fmt.Println("Leave master put")
+	//fmt.Println("Leave master put")
 }
 
 // FileChord is to calculate the file postion given a file name
@@ -218,7 +218,7 @@ func (m *Master) FileChord(FileName string) []int {
 	count := 0
 	idx := (int(hashSum))
 	ret := make([]int, 3)
-	fmt.Println("idx is " + strconv.Itoa(idx))
+	//fmt.Println("idx is " + strconv.Itoa(idx))
 	i := idx
 	printMemberAliveList(m.MemberAliveList)
 	for count < 3 {
@@ -373,7 +373,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	}
 
 	if m.MyMaster == util.WhoAmI() {
-		fmt.Println("Update myself to be master.")
+		//fmt.Println("Update myself to be master.")
 		m.IsMaster = true
 	} else {
 		m.IsMaster = false
