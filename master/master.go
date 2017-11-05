@@ -23,6 +23,7 @@ const (
 	repairPending  = 4
 	rpcServerport  = 9876
 	sdfsListener   = 4008
+	sdfsDir        = "/home/yifeili3/sdfs/"
 )
 
 type Master struct {
@@ -290,7 +291,7 @@ func (m *Master) ProcessDeleteReq(remoteAddr *net.UDPAddr, FileName string) {
 			}
 			// getFileContent := shareReadWrite.NewNode("localhost:9876", "localhost:10030")
 			var reply string
-			err = client.Call("Node.DeleteFile", FileName, &reply)
+			err = client.Call("Node.DeleteFile", sdfsDir+FileName, &reply)
 			// fmt.Println("The reply is:" + reply)
 
 		}
