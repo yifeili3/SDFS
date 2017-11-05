@@ -6,7 +6,6 @@ import (
 	"SDFS/util"
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
 	"net/rpc"
@@ -183,7 +182,7 @@ func (d *Daemon) HandleStdIn() {
 					d.delete(command[1])
 				} else if len(command) == 2 && command[0] == "LS" {
 					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to LS file "+command[1]+" "+command[2])
-					d.list(command[1])ß
+					d.list(command[1])
 				} else {
 					log.Println("Please enter valid command!")
 					continue
@@ -689,7 +688,7 @@ func (d *Daemon) SDFSListener() {
 }
 
 func (d *Daemon) put(localFile string, sdfsFile string) {
-	tStart:=time.Now()
+	tStart := time.Now()
 	// rpc to get replica list
 	if d.PutState == FIRSTPUT {
 		data := util.RPCMeta{Command: util.Message{Cmd: "PUT", SdfsFileName: sdfsFile}}
@@ -757,7 +756,7 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 }
 
 func (d *Daemon) get(sdfsFile string, localFile string) {
-	tStart:=time.Now()
+	tStart := time.Now()
 	data := util.RPCMeta{Command: util.Message{Cmd: "GET", SdfsFileName: sdfsFile}}
 	b := util.RPCformat(data)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
