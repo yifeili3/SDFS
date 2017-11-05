@@ -356,22 +356,18 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 		}
 
 	}
-	//fmt.Println(masterCount)
-	if masterCount[0] >= masterCount[1] {
-		if masterCount[0] >= masterCount[2] {
-			m.MyMaster = 1
-		} else {
-			m.MyMaster = 3
-		}
-	} else { // 1>0
-		if masterCount[1] >= masterCount[2] {
-			// 1>2 , it's 1
-			m.MyMaster = 2
-		} else {
-			// 2>1
-			m.MyMaster = 3
-		}
+
+	fmt.Println(masterCount)
+	if masterCount[0] >= masterCount[1] && masterCount[0] >= masterCount[2] {
+		m.MyMaster = 1
 	}
+	if masterCount[1] >= masterCount[0] && masterCount[1] >= masterCount[2] {
+		m.MyMaster = 2
+	}
+	if masterCount[2] >= masterCount[0] && masterCount[2] >= masterCount[1] {
+		m.MyMaster = 3
+	}
+
 	if m.MyMaster == util.WhoAmI() {
 		fmt.Println("Update myself to be master.")
 		m.IsMaster = true
