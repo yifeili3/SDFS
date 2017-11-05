@@ -339,7 +339,6 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	//fmt.Println("get from node and update membership")
 	masterCount := [3]int{0, 0, 0}
 	var needrepair []int
-	var flag bool
 	for i := range membership {
 		stateBefore := m.MemberAliveList[i]
 		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
