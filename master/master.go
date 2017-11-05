@@ -320,6 +320,7 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 }
 
 func (m *Master) UpdateAlivelist(membership []member.Node) {
+	fmt.Println("get from node and update membership")
 	masterCount := [3]int{0, 0, 0}
 	for i := range membership {
 		stateBefore := m.MemberAliveList[i]
@@ -355,6 +356,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	} else {
 		m.IsMaster = false
 	}
+	fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
 
 	// printMemberAliveList(m.MemberAliveList)
 }
