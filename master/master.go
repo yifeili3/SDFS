@@ -429,6 +429,7 @@ func (m *Master) FailTransferRep(failIndex int) {
 // find a new available node for this file, {ID0, ID1, ID2}, the alive anti-clock node
 func (m *Master) FindAvailNode(input []int) int {
 	sort.Ints(input)
+	fmt.Println(input)
 	var replicaNode []int
 	for idx := range input {
 		if input[idx] != -1 {
@@ -445,6 +446,7 @@ func (m *Master) FindAvailNode(input []int) int {
 	}
 	for {
 		if m.MemberAliveList[start-1] == true {
+			fmt.Printf("Find the first node %d", start)
 			break
 		}
 	}
