@@ -18,6 +18,7 @@ func main() {
 		// run master
 		Master := master.NewMaster()
 		go Master.UDPListener()
+		go Master.DisseminateMeta()
 	}
 
 	if Daemon.ID == 1 {

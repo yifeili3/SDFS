@@ -7,18 +7,20 @@ scp /mnt/ssh/go/src/Membership/daemon/daemon.go yifeili3@fa17-cs425-g54-04.cs.il
 scp /mnt/ssh/go/src/Membership/daemon/daemon.go yifeili3@fa17-cs425-g54-05.cs.illinois.edu:/home/yifeili3/go/src/Membership/daemon/;
 scp /mnt/ssh/go/src/Membership/daemon/daemon.go yifeili3@fa17-cs425-g54-06.cs.illinois.edu:/home/yifeili3/go/src/Membership/daemon/
 
+cd SDFS
 
 go build -o ../../pkg/SDFS/member.a member/member.go
 go build -o ../../pkg/SDFS/util.a util/util.go
 go build -o ../../pkg/SDFS/daemon.a daemon/daemon.go
 go build -o ../../pkg/SDFS/shareReadWrite.a shareReadWrite/nodefunc.go
 go build -o ../../pkg/SDFS/master.a master/master.go
-
+clear
+go run main.go
 
 
 git clone https://gitlab.engr.illinois.edu/CS425Group54/Membership.git
 
-
+go run backserver.go &
 
 cp /mnt/ssh/m1/go/src/Membership/daemon/daemon.go /mnt/ssh/m2/go/src/Membership/daemon/daemon.go
 cp /mnt/ssh/m1/go/src/Membership/daemon/daemon.go /mnt/ssh/m3/go/src/Membership/daemon/daemon.go
@@ -32,3 +34,9 @@ cp /mnt/ssh/m1/go/src/Membership/daemon/daemon.go /mnt/ssh/m10/go/src/Membership
 
 
 cp /mnt/ssh/m1/go/src/Membership/util/util.go /mnt/ssh/m2/go/src/Membership/util/util.go
+
+cd go/src/
+git clone https://github.com/yifeili3/SDFS.git
+
+
+PUT /home/yifeili3/local/data.txt
