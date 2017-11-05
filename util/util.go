@@ -17,6 +17,7 @@ const (
 	serverBase     = "172.22.154.132"
 	masterSendport = 8002
 	sdfsport       = 4008
+	masterRevport  = 4010
 )
 
 type RPCMeta struct {
@@ -105,6 +106,25 @@ func MasterUDPSend(dstAddr *net.UDPAddr, info []byte) {
 	}
 	defer conn.Close()
 	conn.Write(info)
+}
+
+// MasterMetaSend is for master to send metadata to other master candidate
+func MasterMetaSend(dstAddr *net.UDPAddr, info []byte) {
+	srcAddr := net.UDPAddr{
+		IP:   net.ParseIP(WhereAmI()),
+		Port: masterSendport,
+	}
+	dst := &net.UDPAddr{
+		Port: masterRevport,
+		IP:   dstAddr.IP,
+	}
+	conn, err := net.DialUDP("udp", &srcAddr, dst)
+	if err != nil {
+		fmt.Println("Error in master sending UDPMeta:", err)
+	}
+	defer conn.Close()
+	conn.Write(info)
+
 }
 
 func RPCformat(rpcmeta RPCMeta) []byte {

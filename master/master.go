@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/rpc"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -19,6 +20,7 @@ const (
 	putPending     = 1
 	putDone        = 2
 	deletePending  = 3
+	repairPending  = 4
 	rpcServerport  = 4004
 	sdfsListener   = 4008
 )
@@ -28,6 +30,7 @@ type Master struct {
 	MemberAliveList []bool
 	Addr            net.UDPAddr
 	IsMaster        bool
+	MyMaster        int
 }
 
 type MetaMap map[string]*util.MetaInfo
@@ -51,6 +54,23 @@ func NewMaster() (m *Master) {
 	}
 	m.MemberAliveList[ID-1] = true
 	return m
+}
+
+func (m *Master) DisseminateMeta() {
+	myID := util.WhoAmI()
+	for {
+		if m.IsMaster == false {
+			return
+		} else {
+			// send message to other two backup masters
+			for i := 0; i < 3; i++ {
+				if m.MemberAliveList[i] == true && i+1 != myID {
+					geneMeta(m.MetaData, i+1, "METADATA")
+				}
+			}
+		}
+	}
+
 }
 
 func (m *Master) UDPListener() {
@@ -98,15 +118,33 @@ func (m *Master) UDPListener() {
 						m.ProcessPUTComfirm(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "PUTACK" {
 						m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "FAILACK" {
+						m.ProcFailRepair(remoteAddr, ret.Command.SdfsFileName)
 					}
 				} else if len(ret.Membership) != 0 {
 					m.UpdateAlivelist(ret.Membership)
+				} else if len(ret.Metadata) != 0 {
+					// ths message is sent by
+					m.UpdateMeta(ret.Metadata)
 				}
 			}
 		}
 
 	}
 
+}
+
+func (m *Master) UpdateMeta(Metadata map[string]util.MetaInfo) {
+	if m.IsMaster == true {
+		return
+	} else {
+		for fileName, value := range Metadata {
+			m.MetaData[fileName].Filename = value.Filename
+			m.MetaData[fileName].ReplicaList = value.ReplicaList
+			m.MetaData[fileName].State = value.State
+			m.MetaData[fileName].Timestamp = value.Timestamp
+		}
+	}
 }
 
 func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
@@ -149,6 +187,9 @@ func (m *Master) ProcessPUTReq(remoteAddr *net.UDPAddr, FileName string) {
 	fmt.Println("Leave master put")
 }
 
+// FileChord is to calculate the file postion given a file name
+// Using hash32%10 to get the position h
+// Start from the h, h-1, h-2 is the three replica's location
 func (m *Master) FileChord(FileName string) []int {
 	h := fnv.New32a()
 	h.Write([]byte(FileName))
@@ -157,17 +198,25 @@ func (m *Master) FileChord(FileName string) []int {
 	idx := (int(hashSum))
 	ret := make([]int, 3)
 	fmt.Println("idx is " + strconv.Itoa(idx))
+	i := idx
 	printMemberAliveList(m.MemberAliveList)
 	for count < 3 {
-		if m.MemberAliveList[idx] == true {
-			fmt.Println(idx)
-			ret[count] = idx + 1
-			count += 1
+		if m.MemberAliveList[i] == true {
+			//fmt.Println(idx)
+			ret[count] = i + 1
+			count++
 		}
-		idx += 1
-		if idx == 10 {
-			idx = 0
+		i--
+		if i == idx {
+			break
 		}
+		if i == 0 {
+			i = 9
+		}
+	}
+	for count < 3 {
+		ret[count] = -1
+		count++
 	}
 	return ret
 }
@@ -263,10 +312,118 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 
 func (m *Master) UpdateAlivelist(membership []member.Node) {
 	for i := range membership {
+		stateBefore := m.MemberAliveList[i]
 		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
+		stateAfter := m.MemberAliveList[i]
+
+		if stateBefore == true && stateAfter == false {
+			// need up date file to other nodes
+			m.FailTransferRep(i)
+			// if master fails
+			if i+1 == m.MyMaster {
+				m.UpdateNewMaster()
+			}
+		}
+
 	}
 	// printMemberAliveList(m.MemberAliveList)
+}
 
+func (m *Master) UpdateNewMaster() {
+	myID := util.WhoAmI()
+	for i := 0; i < 3; i++ {
+		if m.MemberAliveList[i] == true {
+			m.MyMaster = i + 1
+			break
+		}
+	}
+	if m.MyMaster == myID {
+		m.IsMaster = true
+	}
+}
+
+func (m *Master) FailTransferRep(failIndex int) {
+	fileNames := []string{}
+	for fileName, metaInfo := range m.MetaData {
+		for idx := range metaInfo.ReplicaList {
+			if metaInfo.ReplicaList[idx] == failIndex+1 {
+				fileNames = append(fileNames, fileName)
+				metaInfo.ReplicaList[idx] = -1
+				metaInfo.State = repairPending
+				metaInfo.Timestamp = time.Now().Unix()
+			}
+		}
+	}
+	// fileNames is all the file name in the node, then find an new available node for this replica
+	for fileindex := range fileNames {
+		ID := m.FindAvailNode(m.MetaData[fileNames[fileindex]].ReplicaList)
+		ip := util.CalculateIP(ID)
+		remoteAddr := &net.UDPAddr{
+			IP: net.ParseIP(ip),
+		}
+		genReplyandSend(m.MetaData[fileNames[fileindex]].ReplicaList, "FAILREP", fileNames[fileindex], remoteAddr)
+	}
+}
+
+// find a new available node for this file, {ID0, ID1, ID2}, the alive anti-clock node
+func (m *Master) FindAvailNode(input []int) int {
+	sort.Ints(input)
+	var replicaNode []int
+	for idx := range input {
+		if input[idx] != -1 {
+			replicaNode = append(replicaNode, input[idx])
+		}
+	}
+
+	ID := replicaNode[0]
+	var start int
+	if ID-1 > 0 {
+		start = ID - 1
+	} else {
+		start = 9
+	}
+	for {
+		if m.MemberAliveList[start-1] == true {
+			break
+		}
+	}
+	if len(replicaNode) == 1 {
+		return start
+	}
+	// see the replicaNode if it's equal to start, then find the anticlock for this node
+	if start == replicaNode[1] {
+		ID = replicaNode[1]
+		if ID-1 > 0 {
+			start = ID - 1
+		} else {
+			start = 9
+		}
+		for {
+			if m.MemberAliveList[start-1] == true {
+				break
+			}
+		}
+		return start
+	} else {
+		return start
+	}
+}
+
+func (m *Master) ProcFailRepair(remoteAddr *net.UDPAddr, FileName string) {
+	ID := util.CalculateID(remoteAddr.IP.String())
+	fmt.Printf("Get Message from %d, knowing has repaired file %s\n", ID, FileName)
+	for i := range m.MetaData[FileName].ReplicaList {
+		if m.MetaData[FileName].ReplicaList[i] == -1 {
+			m.MetaData[FileName].ReplicaList[i] = ID
+			break
+		}
+	}
+	for i := range m.MetaData[FileName].ReplicaList {
+		if m.MetaData[FileName].ReplicaList[i] == -1 {
+			return
+		}
+	}
+	m.MetaData[FileName].State = putDone
 }
 
 func genReplyandSend(repList []int, cmd string, sdfsfile string, remoteAddr *net.UDPAddr) {
@@ -284,6 +441,25 @@ func geneReply(repList []int, cmd string, sdfsfile string) *util.RPCMeta {
 			SdfsFileName: sdfsfile,
 		},
 	}
+}
+
+func geneMeta(Metadata MetaMap, srcID int, cmd string) {
+
+	metamap := make(map[string]util.MetaInfo)
+	for fileName, metaInfo := range Metadata {
+		metamap[fileName] = *metaInfo
+	}
+	rpcmsg := &util.RPCMeta{
+		Metadata: metamap,
+		Command: util.Message{
+			Cmd: cmd,
+		},
+	}
+	b := util.RPCformat(*rpcmsg)
+	remoteDst := &net.UDPAddr{
+		IP: net.ParseIP(util.CalculateIP(srcID)),
+	}
+	util.MasterMetaSend(remoteDst, b)
 }
 
 func calTCP(ID int) string {
