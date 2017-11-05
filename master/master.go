@@ -408,13 +408,14 @@ func (m *Master) FailTransferRep(failIndex int) {
 				metaInfo.ReplicaList[idx] = -1
 				metaInfo.State = repairPending
 				metaInfo.Timestamp = time.Now()
-				fmt.Printf("File %s needs to be repaired\n", fileName)
+
 			}
 		}
 	}
 	// fileNames is all the file name in the node, then find an new available node for this replica
 	for fileindex := range fileNames {
 		ID := m.FindAvailNode(m.MetaData[fileNames[fileindex]].ReplicaList)
+		fmt.Printf("File %s needs to be repaired in node %d\n", fileNames[fileindex], ID)
 		ip := util.CalculateIP(ID)
 		remoteAddr := &net.UDPAddr{
 			IP: net.ParseIP(ip),
