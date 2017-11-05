@@ -145,48 +145,11 @@ func (d *Daemon) HandleStdIn() {
 	inputReader := bufio.NewReader(os.Stdin)
 
 	for {
-		/*
-			if d.PutState == SECONDPUT {
-				tNow := time.Now()
-				elapse := tNow.Sub(d.PutTime)
-				if elapse > time.Duration(10)*time.Second {
-					d.PutState = FIRSTPUT
-					fmt.Println("Time out")
-					continue
-				}
-				continue
-			}*/
-		if d.PutState == SECONDPUT {
-			fmt.Println("Please confirm in 30 seconds or else automatically reject.")
-		}
-		tNow := time.Now()
-		input, _ = inputReader.ReadString('\n')
-		in := strings.Replace(input, "\n", "", -1)
-		log.Println("Get the input:" + in)
-		command := strings.Split(in, " ")
-		tInterval := time.Now().Sub(tNow)
-		if d.PutState == SECONDPUT {
-			if tInterval > time.Duration(30)*time.Second {
-				fmt.Println("Sorry, the input is timeout, please try again")
-				d.PutState = FIRSTPUT
-				continue
-			} else {
-				if command[0] == "YES" {
-					// handle second write
-					fmt.Println("Accept write")
-					d.put(d.PutInfo.Localfile, d.PutInfo.Sdfsfile)
-					d.PutState = FIRSTPUT
-				} else if command[0] == "NO" {
-					// reject second write
-					fmt.Println("Reject write")
-					d.PutState = FIRSTPUT
-					continue
-				} else {
-					log.Println("yes or no")
-					continue
-				}
-			}
-		} else if d.PutState == FIRSTPUT {
+		if d.PutState == FIRSTPUT {
+			input, _ = inputReader.ReadString('\n')
+			in := strings.Replace(input, "\n", "", -1)
+			log.Println("Get the input:" + in)
+			command := strings.Split(in, " ")
 			if len(command) == 1 {
 				if command[0] == "JOIN" {
 					d.joinGroup()
@@ -207,7 +170,6 @@ func (d *Daemon) HandleStdIn() {
 			} else {
 				if len(command) == 3 && command[0] == "PUT" {
 					d.put(command[1], command[2])
-					d.PutInfo = fileInfo{Localfile: command[1], Sdfsfile: command[2]}
 				} else if len(command) == 3 && command[0] == "GET" {
 					d.get(command[1], command[2])
 				} else if len(command) == 2 && command[0] == "DELETE" {
@@ -657,8 +619,47 @@ func (d *Daemon) SDFSListener() {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "PUTCONFIRM" {
 				log.Println("Previously there's another put on same file within 60s. Do you really want to put? [YES/NO]")
-				d.PutState = SECONDPUT
-				d.Msg <- ret
+				inputReader := bufio.NewReader(os.Stdin)
+				//tPUT := time.Now()
+				c := make(chan bool)
+				go func() {
+					d.PutState = SECONDPUT
+					input, _ := inputReader.ReadString('\n')
+					in := strings.Replace(input, "\n", "", -1)
+					command := strings.Split(in, " ")
+					if len(command) == 1 {
+						if command[0] == "YES" {
+							ret.Command.Cmd = "PUTCONFIRMYES"
+							d.PutState = FIRSTPUT
+							c <- true
+							close(c)
+						} else if command[0] == "NO" {
+							ret.Command.Cmd = "PUTCONFIRMNO"
+							d.PutState = FIRSTPUT
+							c <- false
+							close(c)
+						}
+					}
+				}()
+				select {
+				case res := <-c:
+					{
+						if res {
+							fmt.Println("Accept Write")
+						} else {
+							fmt.Println("Reject Write")
+						}
+						d.PutState = FIRSTPUT
+						d.Msg <- ret
+					}
+				case <-time.After(time.Second * 5):
+					{
+						d.PutState = SECONDPUT
+						fmt.Println("Confirmation time out, please enter command twice to proceed")
+						ret.Command.Cmd = "PUTCONFIRMNO"
+						d.Msg <- ret
+					}
+				}
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
@@ -679,16 +680,39 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 		b := util.RPCformat(data)
 		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 		util.UDPSend(&targetAddr, b)
-	} else if d.PutState == SECONDPUT {
-		data := util.RPCMeta{Command: util.Message{Cmd: "PUTCONFIRM", SdfsFileName: sdfsFile}}
-		b := util.RPCformat(data)
-		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
-		util.UDPSend(&targetAddr, b)
 	}
 
 	msg := <-d.Msg
 
-	if msg.Command.Cmd == "PUTCONFIRM" {
+	if msg.Command.Cmd == "PUTCONFIRMYES" {
+		fmt.Println("REACH HERE")
+		count := 0
+		data := util.RPCMeta{Command: util.Message{Cmd: "PUTCONFIRM", SdfsFileName: sdfsFile}}
+		b := util.RPCformat(data)
+		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+		util.UDPSend(&targetAddr, b)
+		msg := <-d.Msg
+		for i := range msg.ReplicaList {
+			fmt.Println("REACH HERE")
+			fmt.Println(msg.ReplicaList[0])
+			fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
+			err := rpcPutFile(msg.ReplicaList[i], localFile, sdfsDir+sdfsFile)
+			if err == -1 {
+				log.Println("Put file error")
+				break
+			}
+			count++
+		}
+
+		if count == 3 {
+			data := util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
+			b := util.RPCformat(data)
+			targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+			util.UDPSend(&targetAddr, b)
+		}
+		return
+	} else if msg.Command.Cmd == "PUTCONFIRMNO" {
+		d.PutState = FIRSTPUT
 		return
 	}
 
