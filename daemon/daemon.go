@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //metadata: filename, []ReplicaList, timestamp, filesize
@@ -47,6 +48,7 @@ type Daemon struct {
 	CurrentMasterID int
 	MasterList      []member.Node
 	Msg             chan util.RPCMeta
+	Confirm         chan bool
 }
 
 // Introducer process
@@ -111,6 +113,7 @@ func NewDaemon() (daemon *Daemon, err error) {
 		CurrentMasterID: 1,
 		MasterList:      make([]member.Node, 3),
 		Msg:             make(chan util.RPCMeta),
+		Confirm:         make(chan bool),
 	}
 	//fill member in memberlist
 	for i := 0; i < 10; i++ {
@@ -122,8 +125,7 @@ func NewDaemon() (daemon *Daemon, err error) {
 	}
 
 	/*   Initialize SDFS     */
-	//daemon.clearSDFS()
-
+	daemon.clearSDFS()
 	return daemon, err
 }
 
@@ -131,15 +133,19 @@ func NewDaemon() (daemon *Daemon, err error) {
 // Thread to wait for standard input
 func (d *Daemon) HandleStdIn() {
 	var input string
-
 	inputReader := bufio.NewReader(os.Stdin)
+	timeLastPUT := time.Now().Unix()
 	// JOIN LEAVE LIST LISTID
 	for {
 		input, _ = inputReader.ReadString('\n')
-
 		in := strings.Replace(input, "\n", "", -1)
 		log.Println("Get the input:" + in)
 		command := strings.Split(in, " ")
+		timeElapsed := time.Now().Unix() - timeLastPUT
+		if timeElapsed >= 30 {
+			d.Confirm <- false
+			timeElapsed = 0
+		}
 		if len(command) == 1 {
 			if command[0] == "JOIN" {
 				d.joinGroup()
@@ -153,8 +159,10 @@ func (d *Daemon) HandleStdIn() {
 				log.Println("Current ID: " + strconv.Itoa(d.ID))
 			} else if command[0] == "YES" {
 				// handle second write
+				d.Confirm <- true
 			} else if command[0] == "NO" {
 				// reject second write
+				d.Confirm <- false
 			} else if command[0] == "STORE" {
 				d.store()
 			} else {
@@ -163,6 +171,7 @@ func (d *Daemon) HandleStdIn() {
 			}
 		} else {
 			if len(command) == 3 && command[0] == "PUT" {
+				timeLastPUT = time.Now().Unix()
 				d.put(command[1], command[2])
 			} else if len(command) == 3 && command[0] == "GET" {
 				d.get(command[1], command[2])
@@ -293,8 +302,6 @@ func (d *Daemon) updateMemberShip(soureAddr *net.UDPAddr, mlist []member.Node) {
 			// otherwise, believe in myself
 		}
 	}
-	// do majority vote on master
-	d.updateCurrentMaster()
 
 }
 
@@ -320,6 +327,18 @@ func (d *Daemon) UpdateAndDisseminate() {
 
 	d.updateSendList()
 	d.updateMonitorList()
+
+	//Update Current Master
+	if d.MembershipList[d.CurrentMasterID-1].Active && d.MembershipList[d.CurrentMasterID-1].Fail {
+		for count := 0; count < 3; count++ {
+			if d.MembershipList[count].Active && !d.MembershipList[count].Fail {
+				d.CurrentMasterID = count + 1
+				break
+			}
+		}
+	}
+
+	d.MembershipList[d.ID-1].CurrentMasterID = d.CurrentMasterID
 
 	b := util.FormatMemberlist(d.MembershipList)
 	for i := range d.SendList {
@@ -597,12 +616,18 @@ func (d *Daemon) SDFSListener() {
 				log.Println(err)
 			}
 			if ret.Command.Cmd == "PUT" {
-				fmt.Println("In sdfs put")
 				d.Msg <- ret
+			} else if ret.Command.Cmd == "PUTCONFIRM" {
+				log.Println("Previously there's another put on same file within 60s")
+				if <-d.Confirm {
+					d.Msg <- ret
+				}
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
 				d.Msg <- ret
+			} else if ret.Command.Cmd == "FAILREP" {
+				d.repair(ret)
 			} else {
 				log.Println(ret.Command.Cmd)
 			}
@@ -624,7 +649,10 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 
 	for i := range msg.ReplicaList {
 		fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
-		rpcTransferFile(msg.ReplicaList[i], localFile, sdfsFile)
+		err := rpcTransferFile(msg.ReplicaList[i], localFile, sdfsFile)
+		if err == -1 {
+			log.Println("Transfer file error")
+		}
 		// trail
 		break
 	}
@@ -648,8 +676,27 @@ func (d *Daemon) get(sdfsFile string, localFile string) {
 		return
 	}
 	// get file from sdfs
-	rpcTransferFile(msg.ReplicaList[0], sdfsFile, localFile)
-	log.Println("GET " + sdfsFile + " success")
+	err := rpcTransferFile(msg.ReplicaList[0], sdfsFile, localFile)
+	if err == -1 {
+		log.Println("Transfer file error")
+	} else {
+		log.Println("GET " + sdfsFile + " success")
+	}
+}
+
+func (d *Daemon) repair(msg util.RPCMeta) {
+	for i := range msg.ReplicaList {
+		if msg.ReplicaList[i] != -1 {
+			err := rpcTransferFile(msg.ReplicaList[i], msg.Command.SdfsFileName, sdfsDir+msg.Command.SdfsFileName)
+			if err == -1 {
+				log.Println("Transfer file error")
+			}
+		}
+	}
+	data := util.RPCMeta{Command: util.Message{Cmd: "FAILACK", SdfsFileName: msg.Command.SdfsFileName}}
+	b := util.RPCformat(data)
+	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+	util.UDPSend(&targetAddr, b)
 }
 
 func (d *Daemon) delete(sdfsFile string) {
@@ -700,10 +747,11 @@ func (d *Daemon) deleteFile(sdfsFile string) {
 }
 
 func (d *Daemon) updateCurrentMaster() {
+
 	m := make(map[int]int)
 	for i := range d.MembershipList {
 		if d.MembershipList[i].Active && !d.MembershipList[i].Fail {
-			m[i+1]++
+			m[d.MembershipList[i].CurrentMasterID]++
 		}
 	}
 	var mastercount int
@@ -713,15 +761,16 @@ func (d *Daemon) updateCurrentMaster() {
 			master = k
 		}
 	}
+
 	d.CurrentMasterID = master
 }
 
-func rpcTransferFile(serverID int, srcFile string, destFile string) {
+func rpcTransferFile(serverID int, srcFile string, destFile string) (er int) {
 	log.Println("Start Getting File")
 	client, err := rpc.DialHTTP("tcp", calculateIP(serverID)+":9876")
 	if err != nil {
 		log.Printf(">Server dialing error")
-		return
+		er := -1
 	}
 
 	var reply string
@@ -729,9 +778,10 @@ func rpcTransferFile(serverID int, srcFile string, destFile string) {
 	fmt.Println("The reply is:" + reply)
 	if len(reply) == 0 {
 		log.Println("Error, no such file!")
-		return
+		er := -1
 	}
 	n := &shareReadWrite.Node{}
 	cmd := &shareReadWrite.WriteCmd{File: srcFile, Input: reply}
 	n.WriteLocalFile(*cmd, &reply)
+	return er
 }
