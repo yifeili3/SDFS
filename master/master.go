@@ -377,6 +377,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 		m.IsMaster = false
 	}
 	fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
+	fmt.Println(needrepair)
 	if m.IsMaster == true || m.MemberAliveList[m.MyMaster-1] == false {
 		for i := range needrepair {
 			m.FailTransferRep(needrepair[i])
