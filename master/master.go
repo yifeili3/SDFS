@@ -68,7 +68,7 @@ func (m *Master) DisseminateMeta() {
 			for i := 0; i < 3; i++ {
 				//fmt.Println("Finding a master target\n")
 				if m.MemberAliveList[i] == true && i+1 != myID {
-					//fmt.Printf("Sending metadata to %d\n", i+1)
+					fmt.Printf("Sending metadata to %d\n", i+1)
 					geneMeta(m.MetaData, i+1, "METADATA")
 				}
 			}
@@ -139,6 +139,7 @@ func (m *Master) UDPListener() {
 }
 
 func (m *Master) UpdateMeta(Metadata map[string]util.MetaInfo) {
+	fmt.Println("Master: receive metadata!")
 	if m.IsMaster == true {
 		return
 	} else {
