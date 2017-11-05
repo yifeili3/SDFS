@@ -665,6 +665,10 @@ func (d *Daemon) SDFSListener() {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
 				d.Msg <- ret
+			} else if ret.Command.Cmd == "LSNULL" {
+				d.Msg <- ret
+			} else if ret.Command.Cmd == "GETNULL" {
+				d.Msg <- ret
 			} else if ret.Command.Cmd == "FAILREP" {
 				d.repair(ret)
 			} else {
@@ -804,6 +808,10 @@ func (d *Daemon) list(sdfsFile string) {
 	util.UDPSend(&targetAddr, b)
 
 	msg := <-d.Msg
+	if msg.Command.Cmd == "LSNULL" {
+		log.Println("No such file")
+		return
+	}
 	for i := range msg.ReplicaList {
 		log.Println(msg.ReplicaList[i])
 	}
