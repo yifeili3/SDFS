@@ -210,7 +210,7 @@ func (m *Master) FileChord(FileName string) []int {
 		if i == idx {
 			break
 		}
-		if i == 0 {
+		if i == -1 {
 			i = 9
 		}
 	}

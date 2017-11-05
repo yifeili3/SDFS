@@ -653,7 +653,6 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 			log.Println("Put file error")
 		}
 		// trail
-		break
 	}
 
 	data = util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
