@@ -663,7 +663,7 @@ func (d *Daemon) SDFSListener() {
 						d.PutState = FIRSTPUT
 						d.Msg <- ret
 					}
-				case <-time.After(time.Second * 5):
+				case <-time.After(time.Second * 30):
 					{
 						d.PutState = SECONDPUT
 						log.Println("Confirmation time out, please enter command twice to proceed")
@@ -689,6 +689,7 @@ func (d *Daemon) SDFSListener() {
 }
 
 func (d *Daemon) put(localFile string, sdfsFile string) {
+	tStart:=time.Now()
 	// rpc to get replica list
 	if d.PutState == FIRSTPUT {
 		data := util.RPCMeta{Command: util.Message{Cmd: "PUT", SdfsFileName: sdfsFile}}
@@ -700,7 +701,8 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	msg := <-d.Msg
 
 	if msg.Command.Cmd == "PUTCONFIRMYES" {
-		//fmt.Println("REACH HERE")
+		tEnd := time.Now()
+		log.Println("File get-conflict detect Time: " + tEnd.Sub(tStart).String())
 		count := 0
 		data := util.RPCMeta{Command: util.Message{Cmd: "PUTCONFIRM", SdfsFileName: sdfsFile}}
 		b := util.RPCformat(data)
@@ -727,6 +729,8 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 		}
 		return
 	} else if msg.Command.Cmd == "PUTCONFIRMNO" {
+		tEnd := time.Now()
+		log.Println("File get-conflict detect Time: " + tEnd.Sub(tStart).String())
 		d.PutState = FIRSTPUT
 		return
 	}
@@ -753,6 +757,7 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 }
 
 func (d *Daemon) get(sdfsFile string, localFile string) {
+	tStart:=time.Now()
 	data := util.RPCMeta{Command: util.Message{Cmd: "GET", SdfsFileName: sdfsFile}}
 	b := util.RPCformat(data)
 	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
@@ -770,6 +775,8 @@ func (d *Daemon) get(sdfsFile string, localFile string) {
 	} else {
 		log.Println("GET " + sdfsFile + " success")
 	}
+	tEnd := time.Now()
+	log.Println("File get Time: " + tEnd.Sub(tStart).String())
 }
 
 func (d *Daemon) repair(msg util.RPCMeta) {

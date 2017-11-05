@@ -331,6 +331,10 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 	}
 	if metaInfo, exist := m.MetaData[FileName]; exist {
 		metaInfo.State = putDone
+		tNow := time.Now()
+		tInterval := tNow.Sub(metaInfo.Timestamp)
+		log.Println(FileName + ": put took " + tInterval.String())
+
 	} else {
 		log.Println("Error, get the ack of put but no such file")
 	}
@@ -494,6 +498,10 @@ func (m *Master) ProcFailRepair(remoteAddr *net.UDPAddr, FileName string) {
 			return
 		}
 	}
+	tNow := time.Now()
+	tInterval := tNow.Sub(m.MetaData[FileName].Timestamp)
+	log.Println(FileName + ": fail took " + tInterval.String())
+
 	m.MetaData[FileName].State = putDone
 }
 
