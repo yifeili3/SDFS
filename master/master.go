@@ -60,11 +60,13 @@ func (m *Master) DisseminateMeta() {
 	myID := util.WhoAmI()
 	for {
 		if m.IsMaster == false {
-			return
+			continue
 		} else {
+			fmt.Printf("My master is %d\n", m.MyMaster)
 			// send message to other two backup masters
 			for i := 0; i < 3; i++ {
 				if m.MemberAliveList[i] == true && i+1 != myID {
+					fmt.Printf("Sending metadata to %d\n", i+1)
 					geneMeta(m.MetaData, i+1, "METADATA")
 				}
 			}

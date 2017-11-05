@@ -110,6 +110,7 @@ func MasterUDPSend(dstAddr *net.UDPAddr, info []byte) {
 
 // MasterMetaSend is for master to send metadata to other master candidate
 func MasterMetaSend(dstAddr *net.UDPAddr, info []byte) {
+	fmt.Printf("Master is sending out metadata!\n")
 	srcAddr := net.UDPAddr{
 		IP:   net.ParseIP(WhereAmI()),
 		Port: masterSendport,
