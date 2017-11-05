@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 )
 
 //metadata: filename, []ReplicaList, timestamp, filesize
@@ -134,18 +133,18 @@ func NewDaemon() (daemon *Daemon, err error) {
 func (d *Daemon) HandleStdIn() {
 	var input string
 	inputReader := bufio.NewReader(os.Stdin)
-	timeLastPUT := time.Now().Unix()
+	//timeLastPUT := time.Now().Unix()
 	// JOIN LEAVE LIST LISTID
 	for {
 		input, _ = inputReader.ReadString('\n')
 		in := strings.Replace(input, "\n", "", -1)
 		log.Println("Get the input:" + in)
 		command := strings.Split(in, " ")
-		timeElapsed := time.Now().Unix() - timeLastPUT
+		/*timeElapsed := time.Now().Unix() - timeLastPUT
 		if timeElapsed >= 30 {
 			d.Confirm <- false
 			timeElapsed = 0
-		}
+		}*/
 		if len(command) == 1 {
 			if command[0] == "JOIN" {
 				d.joinGroup()
@@ -159,10 +158,10 @@ func (d *Daemon) HandleStdIn() {
 				log.Println("Current ID: " + strconv.Itoa(d.ID))
 			} else if command[0] == "YES" {
 				// handle second write
-				d.Confirm <- true
+				//d.Confirm <- true
 			} else if command[0] == "NO" {
 				// reject second write
-				d.Confirm <- false
+				//d.Confirm <- false
 			} else if command[0] == "STORE" {
 				d.store()
 			} else {
@@ -171,7 +170,7 @@ func (d *Daemon) HandleStdIn() {
 			}
 		} else {
 			if len(command) == 3 && command[0] == "PUT" {
-				timeLastPUT = time.Now().Unix()
+				//timeLastPUT = time.Now().Unix()
 				d.put(command[1], command[2])
 			} else if len(command) == 3 && command[0] == "GET" {
 				d.get(command[1], command[2])
@@ -619,9 +618,9 @@ func (d *Daemon) SDFSListener() {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "PUTCONFIRM" {
 				log.Println("Previously there's another put on same file within 60s")
-				if <-d.Confirm {
+				/*if <-d.Confirm {
 					d.Msg <- ret
-				}
+				}*/
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
