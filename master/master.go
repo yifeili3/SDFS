@@ -148,10 +148,20 @@ func (m *Master) UpdateMeta(Metadata map[string]util.MetaInfo) {
 	} else {
 		fmt.Println("Master: receive metadata and update")
 		for fileName, value := range Metadata {
-			m.MetaData[fileName].Filename = value.Filename
-			m.MetaData[fileName].ReplicaList = value.ReplicaList
-			m.MetaData[fileName].State = value.State
-			m.MetaData[fileName].Timestamp = value.Timestamp
+			if metaInfo, exist := m.MetaData[fileName]; exist {
+				m.MetaData[fileName].Filename = value.Filename
+				m.MetaData[fileName].ReplicaList = value.ReplicaList
+				m.MetaData[fileName].State = value.State
+				m.MetaData[fileName].Timestamp = value.Timestamp
+			} else {
+				m.MetaData[fileName] = &util.MetaInfo{
+					Filename:    value.Filename,
+					ReplicaList: value.ReplicaList,
+					Timestamp:   value.Timestamp,
+					State:       value.State,
+				}
+			}
+
 		}
 	}
 }
