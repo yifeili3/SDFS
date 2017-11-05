@@ -178,10 +178,10 @@ func (d *Daemon) HandleStdIn() {
 					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to get file "+command[1]+" "+command[2])
 					d.get(command[1], command[2])
 				} else if len(command) == 2 && command[0] == "DELETE" {
-					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to delete file "+command[1]+" "+command[2])
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to delete file "+command[1])
 					d.delete(command[1])
 				} else if len(command) == 2 && command[0] == "LS" {
-					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to LS file "+command[1]+" "+command[2])
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to LS file "+command[1])
 					d.list(command[1])
 				} else {
 					log.Println("Please enter valid command!")
