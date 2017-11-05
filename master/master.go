@@ -357,7 +357,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 
 	}
 
-	fmt.Println(masterCount)
+	//fmt.Println(masterCount)
 	if masterCount[0] >= masterCount[1] && masterCount[0] >= masterCount[2] {
 		m.MyMaster = 1
 	}
@@ -401,7 +401,7 @@ func (m *Master) FailTransferRep(failIndex int) {
 	//fmt.Printf("Node %d's data needs to be repaired\n", failIndex+1)
 	fileNames := []string{}
 	for fileName, metaInfo := range m.MetaData {
-		fmt.Println(fileName)
+		//fmt.Println(fileName)
 		for idx := range metaInfo.ReplicaList {
 			if metaInfo.ReplicaList[idx] == failIndex+1 {
 				fileNames = append(fileNames, fileName)
@@ -415,7 +415,7 @@ func (m *Master) FailTransferRep(failIndex int) {
 	// fileNames is all the file name in the node, then find an new available node for this replica
 	for fileindex := range fileNames {
 		ID := m.FindAvailNode(m.MetaData[fileNames[fileindex]].ReplicaList)
-		fmt.Printf("File %s needs to be repaired in node %d\n", fileNames[fileindex], ID)
+		log.Printf("File %s needs to be repaired in node %d\n", fileNames[fileindex], ID)
 		ip := util.CalculateIP(ID)
 		remoteAddr := &net.UDPAddr{
 			IP: net.ParseIP(ip),
@@ -427,14 +427,14 @@ func (m *Master) FailTransferRep(failIndex int) {
 // find a new available node for this file, {ID0, ID1, ID2}, the alive anti-clock node
 func (m *Master) FindAvailNode(input []int) int {
 	sort.Ints(input)
-	fmt.Println(input)
+	//fmt.Println(input)
 	var replicaNode []int
 	for idx := range input {
 		if input[idx] != -1 {
 			replicaNode = append(replicaNode, input[idx])
 		}
 	}
-	fmt.Println(replicaNode)
+	//fmt.Println(replicaNode)
 	ID := replicaNode[0]
 	var start int
 	if ID-1 > 0 {
@@ -444,9 +444,9 @@ func (m *Master) FindAvailNode(input []int) int {
 	}
 
 	for {
-		fmt.Println(start)
+		//fmt.Println(start)
 		if m.MemberAliveList[start-1] == true {
-			fmt.Printf("Find the first node %d", start)
+			//fmt.Printf("Find the first node %d", start)
 			break
 		}
 		start--
@@ -482,7 +482,7 @@ func (m *Master) FindAvailNode(input []int) int {
 
 func (m *Master) ProcFailRepair(remoteAddr *net.UDPAddr, FileName string) {
 	ID := util.CalculateID(remoteAddr.IP.String())
-	fmt.Printf("Get Message from %d, knowing has repaired file %s\n", ID, FileName)
+	log.Printf("Get Message from %d, knowing has repaired file %s\n", ID, FileName)
 	for i := range m.MetaData[FileName].ReplicaList {
 		if m.MetaData[FileName].ReplicaList[i] == -1 {
 			m.MetaData[FileName].ReplicaList[i] = ID
@@ -500,7 +500,7 @@ func (m *Master) ProcFailRepair(remoteAddr *net.UDPAddr, FileName string) {
 func genReplyandSend(repList []int, cmd string, sdfsfile string, remoteAddr *net.UDPAddr) {
 	reply := geneReply(repList, cmd, sdfsfile)
 	b := util.RPCformat(*reply)
-	fmt.Println(remoteAddr.String())
+	//fmt.Println(remoteAddr.String())
 	util.MasterUDPSend(remoteAddr, b)
 }
 

@@ -152,16 +152,20 @@ func (d *Daemon) HandleStdIn() {
 			command := strings.Split(in, " ")
 			if len(command) == 1 {
 				if command[0] == "JOIN" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to join")
 					d.joinGroup()
 				} else if command[0] == "LEAVE" {
 					log.Println("node " + strconv.Itoa(d.ID) + " leaves...")
 					util.WriteLog(d.ID, "node "+strconv.Itoa(d.ID)+" leaves...")
 					d.leaveGroup()
 				} else if command[0] == "LIST" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to list group")
 					d.listGroup()
 				} else if command[0] == "LISTID" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to list id")
 					log.Println("Current ID: " + strconv.Itoa(d.ID))
 				} else if command[0] == "STORE" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to see store")
 					d.store()
 				} else {
 					log.Println("Please enter valid command!")
@@ -169,13 +173,17 @@ func (d *Daemon) HandleStdIn() {
 				}
 			} else {
 				if len(command) == 3 && command[0] == "PUT" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to put file "+command[1]+" "+command[2])
 					d.put(command[1], command[2])
 				} else if len(command) == 3 && command[0] == "GET" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to get file "+command[1]+" "+command[2])
 					d.get(command[1], command[2])
 				} else if len(command) == 2 && command[0] == "DELETE" {
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to delete file "+command[1]+" "+command[2])
 					d.delete(command[1])
 				} else if len(command) == 2 && command[0] == "LS" {
-					d.list(command[1])
+					util.WriteLog(d.ID, "Node "+strconv.Itoa(d.ID)+" attempts to LS file "+command[1]+" "+command[2])
+					d.list(command[1])ß
 				} else {
 					log.Println("Please enter valid command!")
 					continue
@@ -334,7 +342,7 @@ func (d *Daemon) UpdateAndDisseminate() {
 		for count := 0; count < 3; count++ {
 			if d.MembershipList[count].Active && !d.MembershipList[count].Fail {
 				d.CurrentMasterID = count + 1
-				fmt.Printf("Update master to be:%d\n", d.CurrentMasterID)
+				log.Printf("Update master to be:%d\n", d.CurrentMasterID)
 				break
 			}
 		}
@@ -603,14 +611,14 @@ func calculateIP(id int) string {
 
 //SDFSListener listens message from master
 func (d *Daemon) SDFSListener() {
-	fmt.Println("sdfsnode: " + d.SDFSUDPAddr.String())
+	//tln("sdfsnode: " + d.SDFSUDPAddr.String())
 	p := make([]byte, 8192)
 	for {
 		n, _, _ := d.SDFSConnection.ReadFromUDP(p)
 		if n == 0 {
 			continue
 		} else {
-			fmt.Println("SDFS: receive something")
+			//fmt.Println("SDFS: receive something")
 			var ret util.RPCMeta
 			err := json.Unmarshal(p[0:n], &ret)
 			if err != nil {
@@ -631,11 +639,13 @@ func (d *Daemon) SDFSListener() {
 					if len(command) == 1 {
 						if command[0] == "YES" {
 							ret.Command.Cmd = "PUTCONFIRMYES"
+							util.WriteLog(d.ID, "Confirm put")
 							d.PutState = FIRSTPUT
 							c <- true
 							close(c)
 						} else if command[0] == "NO" {
 							ret.Command.Cmd = "PUTCONFIRMNO"
+							util.WriteLog(d.ID, "Reject put confirm")
 							d.PutState = FIRSTPUT
 							c <- false
 							close(c)
@@ -646,9 +656,9 @@ func (d *Daemon) SDFSListener() {
 				case res := <-c:
 					{
 						if res {
-							fmt.Println("Accept Write")
+							log.Println("Accept Write")
 						} else {
-							fmt.Println("Reject Write")
+							log.Println("Reject Write")
 						}
 						d.PutState = FIRSTPUT
 						d.Msg <- ret
@@ -656,7 +666,7 @@ func (d *Daemon) SDFSListener() {
 				case <-time.After(time.Second * 5):
 					{
 						d.PutState = SECONDPUT
-						fmt.Println("Confirmation time out, please enter command twice to proceed")
+						log.Println("Confirmation time out, please enter command twice to proceed")
 						ret.Command.Cmd = "PUTCONFIRMNO"
 						d.Msg <- ret
 					}
@@ -690,7 +700,7 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	msg := <-d.Msg
 
 	if msg.Command.Cmd == "PUTCONFIRMYES" {
-		fmt.Println("REACH HERE")
+		//fmt.Println("REACH HERE")
 		count := 0
 		data := util.RPCMeta{Command: util.Message{Cmd: "PUTCONFIRM", SdfsFileName: sdfsFile}}
 		b := util.RPCformat(data)
@@ -698,9 +708,9 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 		util.UDPSend(&targetAddr, b)
 		msg := <-d.Msg
 		for i := range msg.ReplicaList {
-			fmt.Println("REACH HERE")
-			fmt.Println(msg.ReplicaList[0])
-			fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
+			//fmt.Println("REACH HERE")
+			//fmt.Println(msg.ReplicaList[0])
+			//fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
 			err := rpcPutFile(msg.ReplicaList[i], localFile, sdfsDir+sdfsFile)
 			if err == -1 {
 				log.Println("Put file error")
@@ -724,7 +734,7 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	count := 0
 	for i := range msg.ReplicaList {
 
-		fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
+		//fmt.Println("Replica: " + strconv.Itoa(msg.ReplicaList[i]))
 		err := rpcPutFile(msg.ReplicaList[i], localFile, sdfsDir+sdfsFile)
 		if err == -1 {
 			log.Println("Put file error")
@@ -796,7 +806,7 @@ func (d *Daemon) store() {
 	if err != nil {
 		log.Println("ls error")
 	}
-	fmt.Printf("%s", string(out))
+	log.Printf("%s", string(out))
 	return
 }
 
