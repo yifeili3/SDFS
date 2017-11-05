@@ -72,7 +72,7 @@ func (m *Master) DisseminateMeta() {
 				}
 			}
 		}
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 200)
 	}
 
 }
