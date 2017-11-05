@@ -796,16 +796,12 @@ func rpcPutFile(serverID int, localfile string, sdfsfile string) (er int) {
 		return er
 	}
 
+	n := &shareReadWrite.Node{}
 	var reply string
+	n.ReadLocalFile(localfile, &reply)
 	cmd := &shareReadWrite.WriteCmd{File: sdfsfile, Input: reply}
 	err = client.Call("Node.WriteLocalFile", cmd, &reply)
 	fmt.Println("The reply is:" + reply)
-	if len(reply) == 0 {
-		log.Println("Error, no such file!")
-		er := -1
-		return er
-	}
-	n := &shareReadWrite.Node{}
-	n.ReadLocalFile(localfile, &reply)
+
 	return er
 }
