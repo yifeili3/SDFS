@@ -68,7 +68,7 @@ func (m *Master) DisseminateMeta() {
 			for i := 0; i < 3; i++ {
 				//fmt.Println("Finding a master target\n")
 				if m.MemberAliveList[i] == true && i+1 != myID {
-					fmt.Printf("Sending metadata to %d\n", i+1)
+					//fmt.Printf("Sending metadata to %d\n", i+1)
 					geneMeta(m.MetaData, i+1, "METADATA")
 				}
 			}
@@ -106,7 +106,7 @@ func (m *Master) UDPListener() {
 			var ret util.RPCMeta
 			err = json.Unmarshal(p[0:n], &ret)
 			if remoteAddr.Port == 8002 {
-				fmt.Println(len(ret.Metadata))
+				//fmt.Println(len(ret.Metadata))
 			}
 			if err != nil {
 				log.Println("Get some unknow UDP message")
@@ -142,11 +142,11 @@ func (m *Master) UDPListener() {
 }
 
 func (m *Master) UpdateMeta(Metadata map[string]util.MetaInfo) {
-	fmt.Println("Master: receive metadata!")
+	//fmt.Println("Master: receive metadata!")
 	if m.IsMaster == true {
 		return
 	} else {
-		fmt.Println("Master: receive metadata and update")
+		//fmt.Println("Master: receive metadata and update")
 		for fileName, value := range Metadata {
 			if metaInfo, exist := m.MetaData[fileName]; exist {
 				metaInfo.Filename = value.Filename
@@ -372,7 +372,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	} else {
 		m.IsMaster = false
 	}
-	//fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
+	fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
 
 	// printMemberAliveList(m.MemberAliveList)
 }
@@ -504,7 +504,7 @@ func geneMeta(Metadata MetaMap, srcID int, cmd string) {
 	remoteDst := &net.UDPAddr{
 		IP: net.ParseIP(util.CalculateIP(srcID)),
 	}
-	fmt.Println("Master sending metadata to:" + remoteDst.String())
+	//fmt.Println("Master sending metadata to:" + remoteDst.String())
 	util.MasterMetaSend(remoteDst, b)
 }
 
