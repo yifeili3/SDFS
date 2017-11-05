@@ -744,8 +744,12 @@ func (d *Daemon) repair(msg util.RPCMeta) {
 	}
 	data := util.RPCMeta{Command: util.Message{Cmd: "FAILACK", SdfsFileName: msg.Command.SdfsFileName}}
 	b := util.RPCformat(data)
-	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
-	util.UDPSend(&targetAddr, b)
+	for i := 0; i < 3; i++ {
+		targetAddr := d.MasterList[i].UDP
+		util.UDPSend(&targetAddr, b)
+	}
+	//targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+	//util.UDPSend(&targetAddr, b)
 }
 
 func (d *Daemon) delete(sdfsFile string) {
