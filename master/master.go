@@ -68,7 +68,7 @@ func (m *Master) DisseminateMeta() {
 			for i := 0; i < 3; i++ {
 				//fmt.Println("Finding a master target\n")
 				if m.MemberAliveList[i] == true && i+1 != myID {
-					fmt.Printf("Sending metadata to %d\n", i+1)
+					//fmt.Printf("Sending metadata to %d\n", i+1)
 					geneMeta(m.MetaData, i+1, "METADATA")
 				}
 			}
@@ -142,6 +142,7 @@ func (m *Master) UpdateMeta(Metadata map[string]util.MetaInfo) {
 	if m.IsMaster == true {
 		return
 	} else {
+		fmt.Println("Master: receive metadata and update")
 		for fileName, value := range Metadata {
 			m.MetaData[fileName].Filename = value.Filename
 			m.MetaData[fileName].ReplicaList = value.ReplicaList
@@ -321,7 +322,7 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 }
 
 func (m *Master) UpdateAlivelist(membership []member.Node) {
-	fmt.Println("get from node and update membership")
+	//fmt.Println("get from node and update membership")
 	masterCount := [3]int{0, 0, 0}
 	for i := range membership {
 		stateBefore := m.MemberAliveList[i]
@@ -357,7 +358,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	} else {
 		m.IsMaster = false
 	}
-	fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
+	//fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
 
 	// printMemberAliveList(m.MemberAliveList)
 }
