@@ -35,7 +35,7 @@ func (n *Node) ReadLocalFile(file string, ret *string) error {
 		fmt.Println("Remote read failure")
 		return err
 	}
-	fmt.Printf("Read %s success\nThe result is:%s", file, string(fin))
+	//fmt.Printf("Read %s success\nThe result is:%s", file, string(fin))
 	if err != nil {
 
 	} else {
@@ -46,7 +46,7 @@ func (n *Node) ReadLocalFile(file string, ret *string) error {
 }
 
 func (n *Node) WriteLocalFile(cmd WriteCmd, ret *string) error {
-	fmt.Printf("In writeLocalFile: for file %s, the input is %s:\n", cmd.File, cmd.Input)
+	//fmt.Printf("In writeLocalFile: for file %s, the input is %s:\n", cmd.File, cmd.Input)
 	err := ioutil.WriteFile(cmd.File, []byte(cmd.Input), 0666)
 
 	if err != nil {

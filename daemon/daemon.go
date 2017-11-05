@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 )
 
 //metadata: filename, []ReplicaList, timestamp, filesize
@@ -30,6 +29,8 @@ const (
 	masterListener  = 4010
 	sdfsDir         = "/home/yifeili3/sdfs/"
 	localDir        = "/home/yifeili3/local/"
+	FIRSTPUT        = 1
+	SECONDPUT       = 2
 )
 
 // Daemon process
@@ -49,6 +50,13 @@ type Daemon struct {
 	MasterList      []member.Node
 	Msg             chan util.RPCMeta
 	Confirm         chan bool
+	Timeout         chan bool
+	PutState        int
+	PutInfo         fileInfo
+}
+type fileInfo struct {
+	Localfile string
+	Sdfsfile  string
 }
 
 // Introducer process
@@ -114,6 +122,7 @@ func NewDaemon() (daemon *Daemon, err error) {
 		MasterList:      make([]member.Node, 3),
 		Msg:             make(chan util.RPCMeta),
 		Confirm:         make(chan bool),
+		Timeout:         make(chan bool),
 	}
 	//fill member in memberlist
 	for i := 0; i < 10; i++ {
@@ -134,54 +143,59 @@ func NewDaemon() (daemon *Daemon, err error) {
 func (d *Daemon) HandleStdIn() {
 	var input string
 	inputReader := bufio.NewReader(os.Stdin)
-	timeLastPUT := time.Now()
-	// JOIN LEAVE LIST LISTID
+
 	for {
 		input, _ = inputReader.ReadString('\n')
 		in := strings.Replace(input, "\n", "", -1)
 		log.Println("Get the input:" + in)
 		command := strings.Split(in, " ")
-		timeElapsed := timeLastPUT.Sub(time.Now())
-		if timeElapsed > time.Duration(30)*time.Second {
-			d.Confirm <- false
-			timeElapsed = time.Duration(0)
-		}
-		if len(command) == 1 {
-			if command[0] == "JOIN" {
-				d.joinGroup()
-			} else if command[0] == "LEAVE" {
-				log.Println("node " + strconv.Itoa(d.ID) + " leaves...")
-				util.WriteLog(d.ID, "node "+strconv.Itoa(d.ID)+" leaves...")
-				d.leaveGroup()
-			} else if command[0] == "LIST" {
-				d.listGroup()
-			} else if command[0] == "LISTID" {
-				log.Println("Current ID: " + strconv.Itoa(d.ID))
-			} else if command[0] == "YES" {
+
+		if d.PutState == SECONDPUT {
+			if command[0] == "YES" {
 				// handle second write
-				d.Confirm <- true
+				d.put(d.PutInfo.Localfile, d.PutInfo.Sdfsfile)
+				d.PutState = FIRSTPUT
 			} else if command[0] == "NO" {
 				// reject second write
-				d.Confirm <- false
-			} else if command[0] == "STORE" {
-				d.store()
+				d.PutState = FIRSTPUT
+				continue
 			} else {
-				log.Println("Please enter valid command!")
+				log.Println("Please confirm your put first")
 				continue
 			}
+
 		} else {
-			if len(command) == 3 && command[0] == "PUT" {
-				timeLastPUT = time.Now()
-				d.put(command[1], command[2])
-			} else if len(command) == 3 && command[0] == "GET" {
-				d.get(command[1], command[2])
-			} else if len(command) == 2 && command[0] == "DELETE" {
-				d.delete(command[1])
-			} else if len(command) == 2 && command[0] == "LS" {
-				d.list(command[1])
+			if len(command) == 1 {
+				if command[0] == "JOIN" {
+					d.joinGroup()
+				} else if command[0] == "LEAVE" {
+					log.Println("node " + strconv.Itoa(d.ID) + " leaves...")
+					util.WriteLog(d.ID, "node "+strconv.Itoa(d.ID)+" leaves...")
+					d.leaveGroup()
+				} else if command[0] == "LIST" {
+					d.listGroup()
+				} else if command[0] == "LISTID" {
+					log.Println("Current ID: " + strconv.Itoa(d.ID))
+				} else if command[0] == "STORE" {
+					d.store()
+				} else {
+					log.Println("Please enter valid command!")
+					continue
+				}
 			} else {
-				log.Println("Please enter valid command!")
-				continue
+				if len(command) == 3 && command[0] == "PUT" {
+					d.put(command[1], command[2])
+					d.PutInfo = fileInfo{Localfile: command[1], Sdfsfile: command[2]}
+				} else if len(command) == 3 && command[0] == "GET" {
+					d.get(command[1], command[2])
+				} else if len(command) == 2 && command[0] == "DELETE" {
+					d.delete(command[1])
+				} else if len(command) == 2 && command[0] == "LS" {
+					d.list(command[1])
+				} else {
+					log.Println("Please enter valid command!")
+					continue
+				}
 			}
 		}
 	}
@@ -618,11 +632,9 @@ func (d *Daemon) SDFSListener() {
 			if ret.Command.Cmd == "PUT" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "PUTCONFIRM" {
-				log.Println("Previously there's another put on same file within 60s")
-				confirm := <-d.Confirm
-				if confirm {
-					d.Msg <- ret
-				}
+				log.Println("Previously there's another put on same file within 60s. Do you really want to put? [YES/NO]")
+				d.PutState = SECONDPUT
+				d.Msg <- ret
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
@@ -638,15 +650,26 @@ func (d *Daemon) SDFSListener() {
 
 func (d *Daemon) put(localFile string, sdfsFile string) {
 	// rpc to get replica list
-	data := util.RPCMeta{Command: util.Message{Cmd: "PUT", SdfsFileName: sdfsFile}}
-	b := util.RPCformat(data)
-	targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
-	fmt.Println(d.MasterList[d.CurrentMasterID-1])
+	if d.PutState == FIRSTPUT {
+		data := util.RPCMeta{Command: util.Message{Cmd: "PUT", SdfsFileName: sdfsFile}}
+		b := util.RPCformat(data)
+		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+		util.UDPSend(&targetAddr, b)
+	} else {
+		data := util.RPCMeta{Command: util.Message{Cmd: "PUTCONFIRM", SdfsFileName: sdfsFile}}
+		b := util.RPCformat(data)
+		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
+		util.UDPSend(&targetAddr, b)
+	}
 
-	util.UDPSend(&targetAddr, b)
-	fmt.Println("Send to Master")
 	msg := <-d.Msg
+
+	if msg.Command.Cmd == "PUTCONFIRM" {
+		return
+	}
+
 	fmt.Println("Receive from Master")
+
 	count := 0
 	for i := range msg.ReplicaList {
 
@@ -660,9 +683,9 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	}
 
 	if count == 3 {
-		data = util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
-		b = util.RPCformat(data)
-		targetAddr = d.MasterList[d.CurrentMasterID-1].UDP
+		data := util.RPCMeta{Command: util.Message{Cmd: "PUTACK", SdfsFileName: sdfsFile}}
+		b := util.RPCformat(data)
+		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 		util.UDPSend(&targetAddr, b)
 	}
 
@@ -780,7 +803,7 @@ func rpcGetFile(serverID int, localfile string, sdfsfile string) (er int) {
 
 	var reply string
 	err = client.Call("Node.ReadLocalFile", sdfsfile, &reply)
-	fmt.Println("The reply is:" + reply)
+	//fmt.Println("The reply is:" + reply)
 	if len(reply) == 0 {
 		log.Println("Error, no such file!")
 		er := -1
@@ -806,7 +829,7 @@ func rpcPutFile(serverID int, localfile string, sdfsfile string) (er int) {
 	n.ReadLocalFile(localfile, &reply)
 	cmd := &shareReadWrite.WriteCmd{File: sdfsfile, Input: reply}
 	err = client.Call("Node.WriteLocalFile", cmd, &reply)
-	fmt.Println("The reply is:" + reply)
+	//fmt.Println("The reply is:" + reply)
 
 	return er
 }

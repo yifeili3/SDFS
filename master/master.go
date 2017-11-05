@@ -110,7 +110,6 @@ func (m *Master) UDPListener() {
 			} else {
 				if len(ret.Command.Cmd) != 0 {
 					if ret.Command.Cmd == "PUT" {
-						fmt.Println("Enter Master PUT")
 						m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "GET" {
 						m.ProcessGETReq(remoteAddr, ret.Command.SdfsFileName)
@@ -118,8 +117,8 @@ func (m *Master) UDPListener() {
 						m.ProcessLSReq(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "DELETE" {
 						m.ProcessDeleteReq(remoteAddr, ret.Command.SdfsFileName)
-					} else if ret.Command.Cmd == "PUTCOMFIRM" {
-						m.ProcessPUTComfirm(remoteAddr, ret.Command.SdfsFileName)
+					} else if ret.Command.Cmd == "PUTCONFIRM" {
+						m.ProcessPUTConfirm(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "PUTACK" {
 						m.ProcessPUTACK(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "FAILACK" {
@@ -286,7 +285,7 @@ func (m *Master) ProcessDeleteReq(remoteAddr *net.UDPAddr, FileName string) {
 
 }
 
-func (m *Master) ProcessPUTComfirm(remoteAddr *net.UDPAddr, FileName string) {
+func (m *Master) ProcessPUTConfirm(remoteAddr *net.UDPAddr, FileName string) {
 	if m.IsMaster == false {
 		return
 	}
