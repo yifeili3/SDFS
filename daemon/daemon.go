@@ -369,6 +369,7 @@ func (d *Daemon) UpdateAndDisseminate() {
 		for count := 0; count < 3; count++ {
 			if d.MembershipList[count].Active && !d.MembershipList[count].Fail {
 				d.CurrentMasterID = count + 1
+				fmt.Printf("Update master to be:%d\n", d.CurrentMasterID)
 				break
 			}
 		}
@@ -805,6 +806,7 @@ func (d *Daemon) updateCurrentMaster() {
 	for k, v := range m {
 		if v >= mastercount {
 			master = k
+			mastercount = v
 		}
 	}
 
