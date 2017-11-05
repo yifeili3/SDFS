@@ -621,6 +621,7 @@ func (d *Daemon) SDFSListener() {
 				/*if <-d.Confirm {
 					d.Msg <- ret
 				}*/
+				d.Msg <- ret
 			} else if ret.Command.Cmd == "GET" {
 				d.Msg <- ret
 			} else if ret.Command.Cmd == "LS" {
