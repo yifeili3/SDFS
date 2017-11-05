@@ -338,6 +338,7 @@ func (m *Master) ProcessPUTACK(remoteAddr *net.UDPAddr, FileName string) {
 func (m *Master) UpdateAlivelist(membership []member.Node) {
 	//fmt.Println("get from node and update membership")
 	masterCount := [3]int{0, 0, 0}
+	var needrepair []int
 	for i := range membership {
 		stateBefore := m.MemberAliveList[i]
 		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
@@ -347,7 +348,7 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 
 		if stateBefore == true && stateAfter == false {
 			// need up date file to other nodes
-			m.FailTransferRep(i)
+			needrepair = append(needrepair, i)
 
 		}
 
@@ -373,7 +374,11 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 		m.IsMaster = false
 	}
 	fmt.Printf("Master: my master is %d, I'm %d master", m.MyMaster, m.IsMaster)
-
+	if m.IsMaster == true {
+		for i := range needrepair {
+			m.FailTransferRep(needrepair[i])
+		}
+	}
 	// printMemberAliveList(m.MemberAliveList)
 }
 
