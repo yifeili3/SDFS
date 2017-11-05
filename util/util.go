@@ -35,7 +35,7 @@ type Message struct {
 type MetaInfo struct {
 	Filename    string
 	ReplicaList []int
-	Timestamp   int64
+	Timestamp   time.Time
 	State       int
 }
 
