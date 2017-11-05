@@ -303,11 +303,13 @@ func (d *Daemon) updateMemberShip(soureAddr *net.UDPAddr, mlist []member.Node) {
 
 	// normal case when a membershiplist comes in
 	for i := range mlist {
+
 		if id == mlist[i].ID {
 			//increment sender's heartbeat in current node's membershiplist
 			d.MembershipList[i].SetHeartBeat(0)
 			d.MembershipList[i].Active = true
 			d.MembershipList[i].Fail = false
+			d.MembershipList[i].CurrentMasterID = mlist[i].CurrentMasterID
 		} else {
 			if !d.MembershipList[i].Fail {
 				// believe in others
