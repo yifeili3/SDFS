@@ -109,7 +109,7 @@ func (m *Master) UDPListener() {
 						fmt.Println("Enter Master PUT")
 						m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "GET" {
-						m.ProcessPUTReq(remoteAddr, ret.Command.SdfsFileName)
+						m.ProcessGETReq(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "LS" {
 						m.ProcessLSReq(remoteAddr, ret.Command.SdfsFileName)
 					} else if ret.Command.Cmd == "DELETE" {
