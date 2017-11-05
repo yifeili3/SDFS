@@ -342,7 +342,9 @@ func (m *Master) UpdateAlivelist(membership []member.Node) {
 	for i := range membership {
 		stateBefore := m.MemberAliveList[i]
 		m.MemberAliveList[i] = membership[i].Active && !membership[i].Fail
-		masterCount[membership[i].CurrentMasterID-1]++
+		if m.MemberAliveList[i] {
+			masterCount[membership[i].CurrentMasterID-1]++
+		}
 
 		stateAfter := m.MemberAliveList[i]
 
