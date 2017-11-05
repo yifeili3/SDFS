@@ -95,8 +95,9 @@ func (m *Master) UDPListener() {
 	for {
 		// *************************bug here, remote addr  wrong port
 		n, remoteAddr, err := conn.ReadFromUDP(p)
-		remoteAddr.Port = sdfsListener
 		fmt.Println("Master: " + remoteAddr.String())
+		remoteAddr.Port = sdfsListener
+
 		if err != nil {
 			log.Println("Contact get UDP message err!", err)
 		}
@@ -491,6 +492,7 @@ func geneMeta(Metadata MetaMap, srcID int, cmd string) {
 	remoteDst := &net.UDPAddr{
 		IP: net.ParseIP(util.CalculateIP(srcID)),
 	}
+	fmt.Println("Master sending metadata to:" + remoteDst.String())
 	util.MasterMetaSend(remoteDst, b)
 }
 
