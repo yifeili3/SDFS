@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //metadata: filename, []ReplicaList, timestamp, filesize
@@ -49,8 +50,7 @@ type Daemon struct {
 	CurrentMasterID int
 	MasterList      []member.Node
 	Msg             chan util.RPCMeta
-	Confirm         chan bool
-	Timeout         chan bool
+	PutTime         time.Time
 	PutState        int
 	PutInfo         fileInfo
 }
@@ -121,9 +121,8 @@ func NewDaemon() (daemon *Daemon, err error) {
 		CurrentMasterID: 1,
 		MasterList:      make([]member.Node, 3),
 		Msg:             make(chan util.RPCMeta),
-		Confirm:         make(chan bool),
-		Timeout:         make(chan bool),
 		PutState:        0,
+		//Wait:            make(chan bool),
 	}
 	//fill member in memberlist
 	for i := 0; i < 10; i++ {
@@ -146,25 +145,48 @@ func (d *Daemon) HandleStdIn() {
 	inputReader := bufio.NewReader(os.Stdin)
 
 	for {
+		/*
+			if d.PutState == SECONDPUT {
+				tNow := time.Now()
+				elapse := tNow.Sub(d.PutTime)
+				if elapse > time.Duration(10)*time.Second {
+					d.PutState = FIRSTPUT
+					fmt.Println("Time out")
+					continue
+				}
+				continue
+			}*/
+		if d.PutState == SECONDPUT {
+			fmt.Println("Please confirm in 30 seconds or else automatically reject.")
+		}
+		tNow := time.Now()
 		input, _ = inputReader.ReadString('\n')
 		in := strings.Replace(input, "\n", "", -1)
 		log.Println("Get the input:" + in)
 		command := strings.Split(in, " ")
-
+		tInterval := time.Now().Sub(tNow)
 		if d.PutState == SECONDPUT {
-			if command[0] == "YES" {
-				// handle second write
-				d.put(d.PutInfo.Localfile, d.PutInfo.Sdfsfile)
-				d.PutState = FIRSTPUT
-			} else if command[0] == "NO" {
-				// reject second write
+			if tInterval > time.Duration(30)*time.Second {
+				fmt.Println("Sorry, the input is timeout, please try again")
 				d.PutState = FIRSTPUT
 				continue
 			} else {
-				log.Println("Please confirm your put first")
-				continue
+				if command[0] == "YES" {
+					// handle second write
+					fmt.Println("Accept write")
+					d.put(d.PutInfo.Localfile, d.PutInfo.Sdfsfile)
+					d.PutState = FIRSTPUT
+				} else if command[0] == "NO" {
+					// reject second write
+					fmt.Println("Reject write")
+					d.PutState = FIRSTPUT
+					continue
+				} else {
+					log.Println("yes or no")
+					continue
+				}
 			}
-		} else {
+		} else if d.PutState == FIRSTPUT {
 			if len(command) == 1 {
 				if command[0] == "JOIN" {
 					d.joinGroup()
@@ -564,7 +586,6 @@ func (in *Introducer) ContactProc() {
 						util.ContactUDPSend(&in.MembershipList[i].UDP, b)
 					}
 				}
-
 			} else if ret == util.Command("LEAVE") {
 				in.MembershipList[calculateID(remoteAddr.IP.String())-1].Active = false
 			} else if ret == util.Command("ACTIVE") {
@@ -655,7 +676,7 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 		b := util.RPCformat(data)
 		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
 		util.UDPSend(&targetAddr, b)
-	} else {
+	} else if d.PutState == SECONDPUT {
 		data := util.RPCMeta{Command: util.Message{Cmd: "PUTCONFIRM", SdfsFileName: sdfsFile}}
 		b := util.RPCformat(data)
 		targetAddr := d.MasterList[d.CurrentMasterID-1].UDP
@@ -667,8 +688,6 @@ func (d *Daemon) put(localFile string, sdfsFile string) {
 	if msg.Command.Cmd == "PUTCONFIRM" {
 		return
 	}
-
-	fmt.Println("Receive from Master")
 
 	count := 0
 	for i := range msg.ReplicaList {
