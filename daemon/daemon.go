@@ -20,7 +20,7 @@ import (
 
 const (
 	serverBase      = "172.22.154.132"
-	threshold       = 60
+	threshold       = 20
 	contactID       = 1
 	contactListener = 4096
 	contactSender   = 4002

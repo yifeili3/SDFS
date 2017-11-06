@@ -35,6 +35,6 @@ func main() {
 	// originally 100ms
 	for Daemon.Alive {
 		Daemon.UpdateAndDisseminate()
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Millisecond * 100)
 	}
 }
